@@ -1,6 +1,6 @@
-# Copy to .github/workflows/archdiff.yml in your project.
-# Assumes the archdiff folder is committed at tools/archdiff (or change the path / use npx once published).
-name: archdiff
+# Copy to .github/workflows/tecton.yml in your project.
+# Assumes the tecton folder is committed at tools/tecton (or change the path / use npx once published).
+name: tecton
 on: pull_request
 
 permissions:
@@ -13,32 +13,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # archdiff needs the base branch history
+          fetch-depth: 0 # tecton needs the base branch history
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Compare architecture with the base branch
-        id: archdiff
+        id: tecton
         continue-on-error: true
         run: |
-          node tools/archdiff/bin/archdiff.js \
+          node tools/tecton/bin/tecton.js \
             --base "origin/${{ github.base_ref }}" --head HEAD \
-            --out archdiff-report.html --md archdiff.md
+            --out tecton-report.html --md tecton.md
 
       - name: Comment on the pull request
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr comment "${{ github.event.pull_request.number }}" --body-file archdiff.md --edit-last \
-            || gh pr comment "${{ github.event.pull_request.number }}" --body-file archdiff.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file tecton.md --edit-last \
+            || gh pr comment "${{ github.event.pull_request.number }}" --body-file tecton.md
 
       - uses: actions/upload-artifact@v4
         with:
-          name: archdiff-report
-          path: archdiff-report.html
+          name: tecton-report
+          path: tecton-report.html
 
       - name: Fail if the change breaks an architecture rule
-        if: steps.archdiff.outcome == 'failure'
+        if: steps.tecton.outcome == 'failure'
         run: exit 1

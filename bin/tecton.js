@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// archdiff — draw a JS/TS codebase as a map of modules, compare it with a git branch, and check house rules.
+// Tecton — draw a JS/TS codebase as a map of modules, compare it with a git branch, and check house rules.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -11,22 +11,22 @@ import { layout } from '../src/layout.js';
 import { detectSystem, diffSystems } from '../src/system.js';
 import { toHtml, toMarkdown } from '../src/report.js';
 
-const VERSION = '0.2.0';
+const VERSION = '0.3.0';
 
-const HELP = `archdiff — see how a change reshapes your JS/TS codebase
+const HELP = `Tecton — see every shift in your architecture before it becomes a crack
 
 Usage
-  archdiff [dir] [options]      compare the code on disk with a git branch and write a report
-  archdiff init [dir]           create archdiff.config.json with your modules and an example rule
+  tecton [dir] [options]      compare the code on disk with a git branch and write a report
+  tecton init [dir]           create tecton.config.json with your modules and an example rule
 
 Options
   --base <ref>        what to compare against (default: main, then master)
   --head <ref>        compare a commit instead of the files on disk (e.g. HEAD in CI)
   --no-merge-base     compare with the tip of --base instead of where your branch split off
-  --out <file>        HTML report path (default: archdiff-report.html)
+  --out <file>        HTML report path (default: tecton-report.html)
   --md <file>         also write a Markdown summary with a Mermaid diagram (for PR comments)
   --json <file>       also write the raw data as JSON
-  --config <file>     config path (default: <dir>/archdiff.config.json)
+  --config <file>     config path (default: <dir>/tecton.config.json)
   --open              open the report in your browser
   --strict            fail on any rule break, not only new ones
   -h, --help          show this help
@@ -59,10 +59,12 @@ function parseArgs(argv) {
   return o;
 }
 
-function die(msg) { console.error(red(`archdiff: ${msg}`)); process.exit(2); }
+function die(msg) { console.error(red(`tecton: ${msg}`)); process.exit(2); }
 
 function loadConfig(dir, file) {
-  const p = file ? path.resolve(file) : path.join(dir, 'archdiff.config.json');
+  let p = file ? path.resolve(file) : path.join(dir, 'tecton.config.json');
+  // projects set up before the rename keep working
+  if (!file && !fs.existsSync(p) && fs.existsSync(path.join(dir, 'archdiff.config.json'))) p = path.join(dir, 'archdiff.config.json');
   if (!fs.existsSync(p)) { if (file) die(`config not found: ${p}`); return { cfg: {}, path: null }; }
   try { return { cfg: parseJsonc(fs.readFileSync(p, 'utf8')), path: p }; } catch (e) { die(`could not read ${p}: ${e.message}`); }
 }
@@ -87,7 +89,7 @@ function pickBase(dir, opts, cfg) {
 }
 
 function init(dir) {
-  const target = path.join(dir, 'archdiff.config.json');
+  const target = path.join(dir, 'tecton.config.json');
   if (fs.existsSync(target)) die(`${target} already exists`);
   const src = workingTreeSource(dir);
   const grouper = makeGrouper({}, src.files);
@@ -102,7 +104,7 @@ function init(dir) {
   fs.writeFileSync(target, JSON.stringify(cfg, null, 2) + '\n');
   console.log(`${green('created')} ${target}`);
   console.log(`modules found under ${bold(grouper.root || '.')}: ${mods.map(cyan).join(', ') || dim('(none)')}`);
-  console.log(dim('Edit "rules" to describe what may depend on what, then run: archdiff'));
+  console.log(dim('Edit "rules" to describe what may depend on what, then run: tecton'));
 }
 
 function openFile(file) {
@@ -128,7 +130,7 @@ function main() {
 
   const cur = buildGraph(curSrc, cfg);
   const prev = baseSrc ? buildGraph(baseSrc, cfg) : cur;
-  if (!cur.modules.size) die(`no JS/TS files found under ${path.join(dir, cur.root)} (set "root" in archdiff.config.json)`);
+  if (!cur.modules.size) die(`no JS/TS files found under ${path.join(dir, cur.root)} (set "root" in tecton.config.json)`);
   const curViol = evaluate(cur, cfg);
   const baseViol = baseSrc ? evaluate(prev, cfg) : curViol;
   const d = diffGraphs(prev, cur, baseViol, curViol, cfg);
@@ -163,14 +165,14 @@ function main() {
   const markdown = toMarkdown(model);
   model.markdown = markdown;
 
-  const out = path.resolve(opts.out || 'archdiff-report.html');
+  const out = path.resolve(opts.out || 'tecton-report.html');
   fs.writeFileSync(out, toHtml(model));
   if (opts.md) fs.writeFileSync(path.resolve(opts.md), markdown);
   if (opts.json) fs.writeFileSync(path.resolve(opts.json), JSON.stringify(model, null, 2));
 
   // ---- terminal summary ----
   const S = d.summary;
-  console.log(`${bold('archdiff')} ${dim(`${S.files.cur} files · ${S.modules.total} modules · ${S.deps.total} dependencies · ${Date.now() - t0}ms`)}`);
+  console.log(`${bold('tecton')} ${dim(`${S.files.cur} files · ${S.modules.total} modules · ${S.deps.total} dependencies · ${Date.now() - t0}ms`)}`);
   if (base) {
     console.log(`compared with ${cyan(base.label)}: modules ${green(`+${S.modules.added}`)}/${red(`−${S.modules.removed}`)}, dependencies ${green(`+${S.deps.added}`)}/${red(`−${S.deps.removed}`)}`);
     for (const e of d.edges.filter((x) => x.status !== 'same')) {

@@ -9,11 +9,13 @@ export function toHtml(model) {
   const tpl = fs.readFileSync(path.join(here, 'report', 'template.html'), 'utf8');
   const client = fs.readFileSync(path.join(here, 'report', 'client.js'), 'utf8');
   const data = JSON.stringify(model).replace(/</g, '\\u003c').replace(/[\u2028\u2029]/g, (ch) => (ch === '\u2028' ? '\\u2028' : '\\u2029'));
-  const title = `archdiff · ${model.project}`.replace(/[<&]/g, (c) => (c === '<' ? '&lt;' : '&amp;'));
+  const title = `${model.project} · Tecton`.replace(/[<&]/g, (c) => (c === '<' ? '&lt;' : '&amp;'));
   const font = (file) => fs.readFileSync(path.join(here, 'report', 'fonts', file)).toString('base64');
   const fonts = `@font-face{font-family:"Geist";src:url(data:font/woff2;base64,${font('Geist-Variable.woff2')}) format("woff2");font-weight:100 900;font-display:swap}`
     + `@font-face{font-family:"Geist Mono";src:url(data:font/woff2;base64,${font('GeistMono-Variable.woff2')}) format("woff2");font-weight:100 900;font-display:swap}`;
-  return tpl.split('__FONTS__').join(fonts).split('__TITLE__').join(title).split('__DATA__').join(data).split('__CLIENT__').join(client);
+  const favicon = fs.readFileSync(path.join(here, '..', 'brand', 'tecton-favicon.svg'), 'utf8');
+  const faviconUri = `data:image/svg+xml,${encodeURIComponent(favicon.replace(/\s+/g, ' ').trim())}`;
+  return tpl.split('__FAVICON__').join(faviconUri).split('__FONTS__').join(fonts).split('__TITLE__').join(title).split('__DATA__').join(data).split('__CLIENT__').join(client);
 }
 
 const mid = (s) => `m_${s.replace(/[^A-Za-z0-9_]/g, '_')}`;
@@ -23,7 +25,7 @@ const q = (s) => s.replace(/"/g, '#quot;');
 export function toMarkdown(model) {
   const { summary: S, violations, edges, nodes } = model;
   const lines = [];
-  lines.push(`### archdiff: ${model.curLabel} vs ${model.baseLabel || '(no base)'}`);
+  lines.push(`### Tecton: ${model.curLabel} vs ${model.baseLabel || '(no base)'}`);
   lines.push('');
   const V = S.violations;
   const status = V.newErrors ? `❌ ${V.newErrors} new rule break${V.newErrors === 1 ? '' : 's'}` : '✅ no new rule breaks';

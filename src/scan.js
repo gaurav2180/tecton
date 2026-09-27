@@ -178,7 +178,7 @@ export function parseJsonc(text) {
   return JSON.parse(noComments);
 }
 
-/** Read "paths" aliases (e.g. "@/*": ["src/*"]) from tsconfig/jsconfig, plus any from archdiff config. */
+/** Read "paths" aliases (e.g. "@/*": ["src/*"]) from tsconfig/jsconfig, plus any from tecton config. */
 export function loadAliases(source, cfgAliases = {}) {
   const aliases = [];
   for (const name of CONFIG_FILES) {

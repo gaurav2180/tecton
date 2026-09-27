@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__TITLE__</title>
+<link rel="icon" type="image/svg+xml" href="__FAVICON__">
+<meta name="theme-color" content="#0E0F13">
 <style>__FONTS__</style>
 <style>
 /* ============ tokens ============ */
@@ -11,9 +13,9 @@
   color-scheme: light;
   --font: "Geist", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --bg: #fafafa; --surface: #ffffff; --surface-2: #f4f4f5; --surface-3: #ececee;
-  --border: #e7e7ea; --border-strong: #d6d6db;
-  --text: #0b0b0f; --text-2: #52525b; --text-3: #8a8a93;
+  --bg: #F6F5F2; --surface: #ffffff; --surface-2: #F3F2EF; --surface-3: #EAE8E3;
+  --border: #E6E3DC; --border-strong: #D5D2CA;
+  --text: #0E0F13; --text-2: #52525b; --text-3: #8a8a93;
   --accent: #5b5bd6; --accent-2: #7b61ff; --accent-soft: #eeeefd; --accent-text: #4343b8;
   --add: #16a34a; --add-soft: #e8f7ee; --add-text: #15803d;
   --rem: #dc2626; --rem-soft: #fdeded; --rem-text: #b91c1c;
@@ -82,9 +84,10 @@ svg.i { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none;
 .app { display: grid; grid-template-columns: 248px minmax(0, 1fr); height: 100vh; }
 .sidebar { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 14px 12px; gap: 14px; min-height: 0; overflow-y: auto; z-index: 30; }
 .logo { display: flex; align-items: center; gap: 10px; padding: 4px 6px; }
-.logo-mark { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); display: grid; place-items: center; color: #fff; box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 35%, transparent); }
-.logo-mark svg { width: 17px; height: 17px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round; }
-.logo b { font-size: 15px; letter-spacing: -0.02em; font-weight: 650; }
+.logo-mark { width: 28px; height: 28px; border-radius: 6.3px; background: linear-gradient(180deg, #23242D, #0B0C10); display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 2px 6px rgba(14,15,19,.18); flex: none; }
+.logo-mark svg { width: 18px; height: 18px; }
+.logo-mark .pl { fill: #FAFAF7; } .logo-mark .pl-shift { fill: #7C7FF2; }
+.logo b { font-size: 17px; letter-spacing: -0.055em; font-weight: 600; }
 .ver { font: 500 10.5px var(--mono); color: var(--text-3); border: 1px solid var(--border); border-radius: 999px; padding: 1px 6px; margin-left: auto; }
 .project { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; background: var(--surface-2); display: grid; gap: 6px; }
 .project .name { font-weight: 600; display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -490,8 +493,8 @@ i.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex
 .glance { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .g-node { display: inline-flex; align-items: center; gap: 10px; padding: 8px 12px 8px 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); text-align: left; transition: border-color .15s, transform .15s; }
 .g-node.users { padding: 8px 14px; border-radius: 999px; color: var(--text-2); font-weight: 500; }
-.g-node.app { border-top: 3px solid var(--app); }
-.g-node.app:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+.g-node.g-app { border-top: 3px solid var(--app); }
+.g-node.g-app:hover { border-color: var(--border-strong); transform: translateY(-1px); }
 .g-node b { display: block; font-size: 14px; }
 .g-node .faint { font-size: 12px; }
 .g-arrow { color: var(--text-3); display: inline-flex; }

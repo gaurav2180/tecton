@@ -41,6 +41,8 @@
     }
   }
 
+  // Tecton mark: a T of three plates; the right arm has shifted 5u along a 2u fault (see brand/)
+  const TECTON_MARK = '<rect class="pl" x="6" y="14" width="25" height="12" rx="3"/><rect class="pl-shift" x="33" y="9" width="25" height="12" rx="3"/><rect class="pl" x="25" y="28" width="14" height="30" rx="3"/>';
   const ICONS = {
     logo: '<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 7.5l3 8M16 7.5l-3 8M8.5 6h7"/>',
     overview: '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
@@ -108,8 +110,8 @@
     return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
   }
   const store = {
-    get(k) { try { return localStorage.getItem(`archdiff:${k}`); } catch { return null; } },
-    set(k, v) { try { localStorage.setItem(`archdiff:${k}`, v); } catch { /* storage unavailable */ } },
+    get(k) { try { return localStorage.getItem(`tecton:${k}`); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(`tecton:${k}`, v); } catch { /* storage unavailable */ } },
   };
 
   // ------------------------------------------------------------------ derived data
@@ -207,8 +209,8 @@
     const initials = D.project.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || 'AD';
     sb.append(
       h('div', { class: 'logo' },
-        h('div', { class: 'logo-mark' }, s('svg', { viewBox: '0 0 24 24', html: ICONS.logo })),
-        h('b', { text: 'archdiff' }),
+        h('div', { class: 'logo-mark', 'aria-hidden': 'true' }, s('svg', { viewBox: '0 0 64 64', html: TECTON_MARK })),
+        h('b', { text: 'tecton' }),
         h('span', { class: 'ver', text: `v${D.version || '0'}` })),
       h('div', { class: 'project' },
         h('div', { class: 'name' }, h('span', { class: 'avatar', text: initials }), h('span', { text: D.project, title: D.project })),
@@ -309,7 +311,7 @@
       : failing ? `This change breaks ${plural(V.newErrors, 'architecture rule')}` : newCount ? `No new errors, ${plural(V.newWarnings, 'new warning')}` : 'This change keeps the architecture clean';
     const heroText = !hasBase
       ? 'No git base was found, so this is a snapshot of the current code checked against your rules.'
-      : failing ? 'New dependencies cross boundaries your team set in archdiff.config.json. CI will fail until they are removed or the rules are updated.'
+      : failing ? 'New dependencies cross boundaries your team set in tecton.config.json. CI will fail until they are removed or the rules are updated.'
         : `Compared with ${baseShort()}, nothing crosses a boundary you have set.${V.fixed ? ` It also fixes ${plural(V.fixed, 'earlier rule break')}.` : ''}`;
 
     const hero = h('div', { class: `card hero ${failing ? 'fail' : 'pass'}` },
@@ -421,7 +423,7 @@
     const pg = $('#page-rules');
     const failingRules = rules.filter((r) => r.state === 'new' || r.state === 'existing').length;
     pg.append(h('div', { class: 'page-head' },
-      h('div', null, h('h1', { text: 'Rule checks' }), h('p', { text: `The boundaries set in archdiff.config.json, checked against ${hasBase ? D.curLabel : 'the current code'}.` })),
+      h('div', null, h('h1', { text: 'Rule checks' }), h('p', { text: `The boundaries set in tecton.config.json, checked against ${hasBase ? D.curLabel : 'the current code'}.` })),
       h('div', { class: 'right' },
         h('span', { class: 'badge neutral plain', text: plural(rules.length, 'rule') }),
         failingRules ? statusBadge('critical', `${failingRules} failing`) : null,
@@ -430,7 +432,7 @@
       pg.append(h('div', { class: 'card' }, h('div', { class: 'empty-state' },
         h('div', { class: 'ico-box' }, icon('shield')),
         h('h4', { text: 'No rules yet' }),
-        h('p', null, 'Run ', h('code', { text: 'archdiff init' }), ' to create a starter archdiff.config.json, then describe which parts of the app may use which.'))));
+        h('p', null, 'Run ', h('code', { text: 'tecton init' }), ' to create a starter tecton.config.json, then describe which parts of the app may use which.'))));
       return;
     }
     const list = h('div', { class: 'card', id: 'rule-list' });
@@ -474,7 +476,7 @@
   function renderChanges() {
     const pg = $('#page-changes');
     pg.append(h('div', { class: 'page-head' },
-      h('div', null, h('h1', { text: 'Changes' }), h('p', { text: hasBase ? `Every module and dependency that differs from ${baseShort()}.` : 'Nothing to compare against — run archdiff inside a git repo with a main branch.' }))));
+      h('div', null, h('h1', { text: 'Changes' }), h('p', { text: hasBase ? `Every module and dependency that differs from ${baseShort()}.` : 'Nothing to compare against — run Tecton inside a git repo with a main branch.' }))));
     if (!hasBase) {
       pg.append(h('div', { class: 'card' }, h('div', { class: 'empty-state' }, h('div', { class: 'ico-box' }, icon('compare')), h('h4', { text: 'No comparison' }), h('p', { text: 'Commit your code to git and create a main branch, or pass --base <branch>.' }))));
       return;
@@ -521,7 +523,7 @@
   function renderModules() {
     const pg = $('#page-modules');
     pg.append(h('div', { class: 'page-head' },
-      h('div', null, h('h1', { text: 'Modules' }), h('p', { text: 'Each folder archdiff treats as one part of the app, with how much it uses and is used.' }))));
+      h('div', null, h('h1', { text: 'Modules' }), h('p', { text: 'Each folder Tecton treats as one part of the app, with how much it uses and is used.' }))));
     let sort = { k: 'files', dir: -1 };
     let q = '';
     const rowsData = D.nodes.map((n) => ({ n, ...nodeStats.get(n.id), files: n.status === 'removed' ? n.filesBase : n.filesCur }));
@@ -648,7 +650,7 @@
       if (avg(dataUsers) > avg(outUsers)) bottom.appendChild(bottom.firstChild);
     }
     if (bottom.children.length) canvas.appendChild(bottom);
-    if (!SYS.apps.length) canvas.appendChild(h('div', { class: 'empty-state' }, h('div', { class: 'ico-box' }, icon('layers')), h('h4', { text: 'No apps found' }), h('p', { text: 'archdiff looks for package.json files to find the apps in a repo.' })));
+    if (!SYS.apps.length) canvas.appendChild(h('div', { class: 'empty-state' }, h('div', { class: 'ico-box' }, icon('layers')), h('h4', { text: 'No apps found' }), h('p', { text: 'Tecton looks for package.json files to find the apps in a repo.' })));
 
     canvas.appendChild(h('div', { class: 'sys-legend' },
       h('span', null, h('i', { class: 'lg app' }), 'app calls app'), h('span', null, h('i', { class: 'lg data' }), 'reads / writes data'),
@@ -877,7 +879,7 @@
     if (SYS.hasUsers) flow.append(h('div', { class: 'g-node users' }, icon('users'), 'Users'), h('span', { class: 'g-arrow' }, icon('arrowRight')));
     orderApps().forEach((a, i, arr) => {
       const entry = GROUPS.map((g) => [g, (a.groups[g.key] || []).filter((x) => x.status !== 'removed').length]).filter(([, n]) => n);
-      flow.append(h('button', { class: 'g-node app', style: { '--app': appColor(a.id) }, on: { click: () => { go('system'); setTimeout(() => openSys({ type: 'app', id: a.id }), 60); } } },
+      flow.append(h('button', { class: 'g-node g-app', style: { '--app': appColor(a.id) }, on: { click: () => { go('system'); setTimeout(() => openSys({ type: 'app', id: a.id }), 60); } } },
         h('span', { class: 'ico-box app-ico' }, icon(appIcon(a))),
         h('span', null, h('b', { text: a.name }), h('span', { class: 'faint', text: `${a.framework}${entry.length ? ` · ${entry.map(([g, n]) => `${n} ${g.title.toLowerCase().replace('routes & api', 'routes').replace('http endpoints', 'endpoints').replace('jobs & scripts', 'jobs')}`).join(' · ')}` : ''}` }))));
       if (i < arr.length - 1) flow.append(h('span', { class: 'g-arrow' }, icon('arrowRight')));
@@ -885,7 +887,7 @@
     const tail = h('div', { class: 'g-tail' },
       SYS.stores.filter((x) => x.status !== 'removed').map((x) => h('span', { class: 'chip' }, icon('database'), x.name)),
       h('span', { class: 'chip' }, icon('cloud'), plural(sum.outside.total, 'outside service')),
-      hasBase && sum.outside.added ? h('span', { class: 'chip add', text: `+${sum.outside.added} new` }) : null,
+      hasBase && sum.outside.added ? h('span', { class: 'chip add', text: `+${sum.outside.added} new ${sum.outside.added === 1 ? 'service' : 'services'}` }) : null,
       hasBase && sum.entry.added ? h('span', { class: 'chip add', text: `+${sum.entry.added} entry points` }) : null);
     return h('div', { class: 'card', style: { marginTop: '14px' } },
       h('div', { class: 'card-h' }, h('h3', { text: 'Architecture' }), h('div', { class: 'right' }, h('button', { class: 'link-btn', on: { click: () => go('system') } }, 'Open diagram', icon('right')))),
@@ -1411,7 +1413,7 @@
     rules.forEach((r) => items.push({ group: 'Rules', label: r.key, hint: { new: 'new break', existing: 'failing', fixed: 'fixed', pass: 'passing' }[r.state], icon: 'shield', run: () => { go('rules'); setTimeout(() => openRule(r.key), 50); } }));
     items.push({ group: 'Actions', label: 'Copy PR summary (Markdown)', icon: 'copy', run: copySummary });
     items.push({ group: 'Actions', label: 'Export map as SVG', icon: 'image', run: () => { go('map'); setTimeout(exportSvg, 80); } });
-    items.push({ group: 'Actions', label: 'Download report data (JSON)', icon: 'download', run: () => { const { markdown, ...rest } = D; download(new Blob([JSON.stringify(rest, null, 2)], { type: 'application/json' }), `${D.project}-archdiff.json`); toast('JSON downloaded', 'download'); } });
+    items.push({ group: 'Actions', label: 'Download report data (JSON)', icon: 'download', run: () => { const { markdown, ...rest } = D; download(new Blob([JSON.stringify(rest, null, 2)], { type: 'application/json' }), `${D.project}-tecton.json`); toast('JSON downloaded', 'download'); } });
     items.push({ group: 'Actions', label: 'Switch to light theme', icon: 'sun', run: () => applyTheme('light') });
     items.push({ group: 'Actions', label: 'Switch to dark theme', icon: 'moon', run: () => applyTheme('dark') });
     items.push({ group: 'Actions', label: 'Use system theme', icon: 'monitor', run: () => applyTheme('system') });
@@ -1482,7 +1484,7 @@
     $$('.page').forEach((p) => p.classList.toggle('active', p.id === `page-${page}`));
     $$('.nav a').forEach((a) => a.classList.toggle('active', a.dataset.page === page));
     $('#crumb-cur').textContent = PAGES.find((p) => p.id === page).title;
-    document.title = `${PAGES.find((p) => p.id === page).title} · ${D.project} · archdiff`;
+    document.title = `${PAGES.find((p) => p.id === page).title} · ${D.project} · Tecton`;
     $('#content').scrollTop = 0;
     hideTip();
     requestAnimationFrame(placeTabs);

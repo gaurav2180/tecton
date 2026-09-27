@@ -1,8 +1,10 @@
-# archdiff
+<p align="center"><img src="brand/tecton-banner.png" alt="Tecton: see every shift in your architecture before it becomes a crack" width="720"></p>
 
-See how a change reshapes your JavaScript/TypeScript codebase.
+# Tecton
 
-archdiff draws your project as a map of **modules** (folders) and the **dependencies** between them,
+**See every shift in your architecture before it becomes a crack.**
+
+Tecton draws your project as a map of **modules** (folders) and the **dependencies** between them,
 compares it with a git branch, and checks **house rules** such as "components must not talk to the
 database directly". You get an interactive HTML page, an optional Markdown summary for pull requests,
 and a non-zero exit code when a change breaks a rule.
@@ -17,11 +19,11 @@ and a non-zero exit code when a change breaks a rule.
 
 ```bash
 cd your-project
-node /path/to/archdiff/bin/archdiff.js init     # writes archdiff.config.json with your modules
-node /path/to/archdiff/bin/archdiff.js --open   # compares your working copy with main
+node /path/to/tecton/bin/tecton.js init     # writes tecton.config.json with your modules
+node /path/to/tecton/bin/tecton.js --open   # compares your working copy with main
 ```
 
-Or link it once so the `archdiff` command works everywhere: `cd archdiff && npm link`.
+Or link it once so the `tecton` command works everywhere: `cd tecton && npm link`.
 
 ## The report
 
@@ -43,7 +45,9 @@ One self-contained HTML file (fonts included, works offline) laid out like a sma
 
 The Geist fonts are embedded under the SIL Open Font License (`src/report/fonts/OFL-LICENSE.txt`).
 
-## Config (`archdiff.config.json`)
+## Config (`tecton.config.json`)
+
+Projects set up with the old name keep working: `archdiff.config.json` is read if there's no `tecton.config.json`.
 
 ```jsonc
 {
@@ -75,9 +79,9 @@ A module can import itself freely; rules are about arrows between modules.
 ## Command line
 
 ```
-archdiff [dir] [--base <ref>] [--head <ref>] [--out report.html] [--md summary.md] [--json data.json]
+tecton [dir] [--base <ref>] [--head <ref>] [--out report.html] [--md summary.md] [--json data.json]
                [--config file] [--no-merge-base] [--strict] [--open]
-archdiff init [dir]
+tecton init [dir]
 ```
 
 Exit code: `1` if the change adds a rule break with severity `error` (`--strict`: any rule break), `2` for usage errors.
@@ -85,11 +89,15 @@ Without git (or without a base branch) it shows a snapshot and fails on any rule
 
 ## In CI
 
-`examples/github-workflow.yml` runs archdiff on every pull request, posts the Markdown summary
+`examples/github-workflow.yml` runs tecton on every pull request, posts the Markdown summary
 (with a Mermaid diagram of only the parts that changed) as a PR comment, uploads the HTML report,
 and fails the check if a rule is broken.
 
-## Limits (v0.1)
+## Brand
+
+The logo files are in [`brand/`](brand/): the mark, lockups for light and dark, app icons, a favicon and a social banner. See `CLAUDE.md` for how to use them.
+
+## Limits (v0.3)
 
 - JS/TS only. Vue/Svelte single-file components aren't read yet.
 - Imports are found with a careful text scan, not a full parser, so exotic code can occasionally be missed.

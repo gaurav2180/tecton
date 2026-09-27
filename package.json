@@ -1,10 +1,10 @@
 {
-  "name": "archdiff",
-  "version": "0.2.0",
-  "description": "See how a change reshapes your JS/TS codebase: module map, before/after diff, and architecture rules.",
+  "name": "tecton",
+  "version": "0.3.0",
+  "description": "Tecton: see every shift in your architecture before it becomes a crack. Architecture diagrams, before/after diffs and boundary rules for JS/TS codebases.",
   "type": "module",
-  "bin": { "archdiff": "bin/archdiff.js" },
-  "files": ["bin", "src", "README.md"],
+  "bin": { "tecton": "bin/tecton.js" },
+  "files": ["bin", "src", "brand", "README.md"],
   "engines": { "node": ">=18" },
   "scripts": { "test": "node test/run.js" },
   "license": "MIT"

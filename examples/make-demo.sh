@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Recreates the "demo-shop" test repo used to check archdiff end to end.
+# Recreates the "demo-shop" test repo used to check tecton end to end.
 #   bash examples/make-demo.sh /tmp/demo-shop
-#   cd /tmp/demo-shop && node <archdiff>/bin/archdiff.js --open
+#   cd /tmp/demo-shop && node <tecton>/bin/tecton.js --open
 # main = a small shop app; branch feature/payments (+ one uncommitted edit) breaks two rules,
 # adds a module (payments), removes one (utils) and adds an outside service (Stripe).
 set -euo pipefail
@@ -59,7 +59,7 @@ EOF
 cat > src/services/products.test.ts <<'EOF'
 import { getProducts } from './products';
 EOF
-cat > archdiff.config.json <<'EOF'
+cat > tecton.config.json <<'EOF'
 {
   "root": "src",
   "rules": [

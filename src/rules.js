@@ -2,7 +2,7 @@
 import { nameMatches } from './graph.js';
 
 /**
- * Rule shapes (in archdiff.config.json → "rules"):
+ * Rule shapes (in tecton.config.json → "rules"):
  *   { "name": "...", "from": "components", "to": ["db", "npm:pg"] }      // forbidden targets
  *   { "name": "...", "from": "lib", "allow": ["utils", "types"] }        // the ONLY internal modules allowed
  * "from"/"to"/"allow" accept module names with * wildcards. npm packages are written "npm:<name>".
