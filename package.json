@@ -1,6 +1,6 @@
 {
   "name": "tecton",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Tecton: see every shift in your architecture before it becomes a crack. Architecture diagrams, before/after diffs and boundary rules for JS/TS codebases.",
   "homepage": "https://github.com/gaurav2180/tecton#readme",
   "repository": {

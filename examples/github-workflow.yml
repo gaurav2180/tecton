@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: 20
 
-      - uses: gaurav2180/tecton@v0.4.0
+      - uses: gaurav2180/tecton@v0.4.1
         # with:
         #   working-directory: apps/web   # where tecton.config.json lives
         #   strict: 'true'                 # fail on existing rule breaks too
