@@ -53,7 +53,11 @@ $('#scrim').addEventListener('click', closeSidebar);
   const clone = map.world.cloneNode(true);
   clone.removeAttribute('id');
   $$('[id], [tabindex], [role], [aria-label]', clone).forEach((el) => ['id', 'tabindex', 'role', 'aria-label'].forEach((a) => el.removeAttribute(a)));
-  svg.appendChild(clone);
+  // its own arrowheads and shadow: the map's defs sit on a hidden page, and browsers don't paint those
+  const defs = /** @type {SVGDefsElement} */ (map.svg.querySelector('defs').cloneNode(true));
+  $$('[id]', defs).forEach((el) => el.setAttribute('id', `pv-${el.id}`));
+  $$('[marker-end]', clone).forEach((el) => el.setAttribute('marker-end', el.getAttribute('marker-end').replace('url(#', 'url(#pv-')));
+  svg.append(defs, clone);
   box.insertBefore(svg, box.firstChild);
 })();
 window.addEventListener('resize', () => { placeTabs(); if (state.page === 'map' && !state.selected) fit(false); if (state.page === 'system') archFit(false); });

@@ -3,7 +3,9 @@
 const SVGNS = 'http://www.w3.org/2000/svg';
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 // ------------------------------------------------------------------ helpers
+/** @type {(sel: string, root?: ParentNode) => any} */
 const $ = (sel, root = document) => root.querySelector(sel);
+/** @type {(sel: string, root?: ParentNode) => any[]} */
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
 function h(tag, props, ...kids) {
@@ -27,7 +29,8 @@ function applyProps(e, p) {
     else if (k === 'text') e.textContent = v;
     else if (k === 'html') e.innerHTML = v;
     else if (k === 'on') for (const ev of Object.keys(v)) e.addEventListener(ev, v[ev]);
-    else if (k === 'style' && typeof v === 'object') Object.assign(e.style, v);
+    // custom properties ('--app') only work through setProperty; Object.assign drops them silently
+    else if (k === 'style' && typeof v === 'object') for (const [sk, sv] of Object.entries(v)) { if (sk.startsWith('--')) e.style.setProperty(sk, sv); else e.style[sk] = sv; }
     else if (k === 'dataset') Object.assign(e.dataset, v);
     else e.setAttribute(k, v === true ? '' : v);
   }

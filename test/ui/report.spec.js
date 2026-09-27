@@ -27,6 +27,9 @@ test.beforeEach(({ page }) => {
 });
 test.afterEach(() => { expect(errors, 'script errors on the page').toEqual([]); });
 
+/** The version badge changes every release; mask it so releases don't change the screenshots. */
+const unversioned = (page) => [page.locator('#sidebar .ver')];
+
 const PAGES = ['overview', 'system', 'map', 'rules', 'changes', 'modules', 'module:services'];
 
 test.describe('every page renders and matches its screenshot', () => {
@@ -34,13 +37,13 @@ test.describe('every page renders and matches its screenshot', () => {
     test(`demo · ${hash}`, async ({ page }) => {
       await open(page, 'demo', hash);
       await expect(page.locator('.page.active')).toBeVisible();
-      await expect(page).toHaveScreenshot(`demo-${hash.replace(':', '-')}.png`);
+      await expect(page).toHaveScreenshot(`demo-${hash.replace(':', '-')}.png`, { mask: unversioned(page) });
     });
   }
   test('big repo · architecture diagram', async ({ page }) => {
     await open(page, 'big', 'system');
     await expect(page.locator('#arch-svg .an')).toHaveCount(4 + 6 + 11 + 1); // apps, stores, outside systems, users
-    await expect(page).toHaveScreenshot('big-system.png');
+    await expect(page).toHaveScreenshot('big-system.png', { mask: unversioned(page) });
   });
 });
 

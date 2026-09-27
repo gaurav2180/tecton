@@ -76,7 +76,7 @@ function archModel() {
   /** @type {ArchNode[]} */
   const nodes = [];
   const usersLinks = SYS.links.filter((l) => l.kind === 'users');
-  if (usersLinks.length) nodes.push({ id: 'users', type: 'person', name: 'Users', kind: 'Person', sub: 'Browser & API clients', status: statusOf(usersLinks), w: 168, h: 120 });
+  if (usersLinks.length) nodes.push({ id: 'users', type: 'person', name: 'Users', kind: 'Person', sub: 'Browser & API clients', status: statusOf(usersLinks), w: 168, h: 128 });
   for (const a of SYS.apps) {
     const desc = entrySummary(a) || 'No entry points found';
     const tech = a.tech.filter((t) => t.toLowerCase() !== a.framework.toLowerCase()).slice(0, 4).join(' · ');
@@ -122,7 +122,7 @@ function archLayout(M) {
   const rowW = (list) => list.reduce((s0, n) => s0 + n.w, 0) + gapOf(list) * Math.max(0, list.length - 1);
   const innerW = Math.max(...appRows.map(rowW), rowW(data), 320);
   const hasUsers = M.byId.has('users');
-  const top = hasUsers ? 120 + 96 : 0;
+  const top = hasUsers ? M.byId.get('users').h + 96 : 0;
   let y = top + PAD;
   const place = (list, rowY, cx) => {
     let x = cx - rowW(list) / 2;
@@ -337,11 +337,12 @@ function archNode(n) {
   const txt = (cls, x, y, t, anchor) => s('text', { class: cls, x, y, 'text-anchor': anchor || 'start' }, t);
   const { w, h } = n;
   if (n.type === 'person') {
-    // C4 person: a rounded body with the head overlapping its top edge
+    // C4 person: a head above a body with rounded shoulders (a clear gap between them, like the notation)
+    const top = 44; const sh = 30; const r = 12;
     g.append(
-      s('rect', { class: 'an-shape', x: 0, y: 40, width: w, height: h - 40, rx: 26 }),
-      s('circle', { class: 'an-shape an-head', cx: w / 2, cy: 24, r: 23 }),
-      txt('an-name', w / 2, 80, n.name, 'middle'), txt('an-kind', w / 2, 96, `[${n.kind}]`, 'middle'), txt('an-sub', w / 2, 111, n.sub, 'middle'));
+      s('path', { class: 'an-shape', d: `M0,${h - r} V${top + sh} Q0,${top} ${sh + 8},${top} H${w - sh - 8} Q${w},${top} ${w},${top + sh} V${h - r} Q${w},${h} ${w - r},${h} H${r} Q0,${h} 0,${h - r} Z` }),
+      s('circle', { class: 'an-shape an-head', cx: w / 2, cy: 19, r: 18 }),
+      txt('an-name', w / 2, top + 36, n.name, 'middle'), txt('an-kind', w / 2, top + 53, `[${n.kind}]`, 'middle'), txt('an-sub', w / 2, top + 70, n.sub, 'middle'));
   } else if (n.type === 'app') {
     g.style.setProperty('--app', n.color);
     g.append(
