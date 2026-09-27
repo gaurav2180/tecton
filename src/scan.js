@@ -4,12 +4,51 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 export const CODE_EXT = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts'];
+// single-file components: only their <script> blocks are code
+export const SFC_EXT = ['.vue', '.svelte'];
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'out', '.next', '.nuxt',
   'coverage', '.turbo', '.vercel', '.cache', '.output', '.svelte-kit']);
 const CONFIG_FILES = ['tsconfig.json', 'jsconfig.json'];
+// other files the system view reads: example env files (service URLs) and vercel.json (cron schedules)
+const EXTRA_RE = /(^|\/)(\.env\.(example|sample|template|dist|defaults)|vercel\.json)$/;
 
-export const isCode = (p) => CODE_EXT.includes(path.posix.extname(p)) && !p.endsWith('.d.ts');
+export const isCode = (p) => (CODE_EXT.includes(path.posix.extname(p)) && !p.endsWith('.d.ts')) || SFC_EXT.includes(path.posix.extname(p));
+export const isExtra = (p) => EXTRA_RE.test(p);
 
+/** The code part of a file: for .vue/.svelte, the <script> blocks with everything else blanked (line numbers kept). */
+export function codeOf(file, text) {
+  if (text == null || !SFC_EXT.includes(path.posix.extname(file))) return text;
+  const out = text.replace(/[^\n]/g, ' ').split('');
+  const re = /<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi;
+  let m;
+  while ((m = re.exec(text))) {
+    const start = m.index + m[0].indexOf('>') + 1;
+    for (let i = 0; i < m[1].length; i++) out[start + i] = m[1][i];
+  }
+  return out.join('');
+}
+
+/**
+ * Run git and return its output as text.
+ * @overload
+ * @param {string} cwd
+ * @param {string[]} args
+ * @returns {string}
+ */
+/**
+ * Run git with `input` on stdin and return the raw bytes (for `cat-file --batch`).
+ * @overload
+ * @param {string} cwd
+ * @param {string[]} args
+ * @param {string} input
+ * @returns {Buffer}
+ */
+/**
+ * @param {string} cwd
+ * @param {string[]} args
+ * @param {string} [input]
+ * @returns {string | Buffer}
+ */
 export function git(cwd, args, input) {
   return execFileSync('git', args, {
     cwd, input: input === undefined ? undefined : Buffer.from(input, 'utf8'),
@@ -32,7 +71,11 @@ export function refExists(dir, ref) {
   try { git(dir, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]); return true; } catch { return false; }
 }
 
-/** The files as they are on disk right now (respecting .gitignore when inside a repo). */
+/**
+ * The files as they are on disk right now (respecting .gitignore when inside a repo).
+ * @param {string} dir
+ * @returns {import('./types.js').Source}
+ */
 export function workingTreeSource(dir) {
   let files;
   const gi = gitInfo(dir);
@@ -57,11 +100,17 @@ export function workingTreeSource(dir) {
     label: 'working tree',
     files: files.filter(isCode).sort(),
     manifests: files.filter((f) => f === 'package.json' || f.endsWith('/package.json')).sort(),
+    extras: files.filter(isExtra).sort(),
     read: (rel) => { try { return fs.readFileSync(path.join(dir, rel), 'utf8'); } catch { return null; } },
   };
 }
 
-/** The files as they were at a git ref (branch, tag or commit). */
+/**
+ * The files as they were at a git ref (branch, tag or commit).
+ * @param {string} dir
+ * @param {string} ref
+ * @returns {import('./types.js').Source}
+ */
 export function gitRefSource(dir, ref) {
   const { prefix } = gitInfo(dir);
   const top = git(dir, ['rev-parse', '--show-toplevel']).trim();
@@ -73,7 +122,8 @@ export function gitRefSource(dir, ref) {
     .filter((f) => !f.split('/').some((s) => SKIP_DIRS.has(s)));
   const code = all.filter(isCode).sort();
   const manifests = all.filter((f) => f === 'package.json' || f.endsWith('/package.json')).sort();
-  const wanted = [...code, ...manifests, ...CONFIG_FILES.filter((c) => all.includes(c))];
+  const extras = all.filter(isExtra).sort();
+  const wanted = [...code, ...manifests, ...extras, ...CONFIG_FILES.filter((c) => all.includes(c))];
 
   // Read every file in one `git cat-file --batch` call instead of one process per file.
   const contents = new Map();
@@ -90,7 +140,7 @@ export function gitRefSource(dir, ref) {
       pos += size + 1;
     }
   }
-  return { label: ref, files: code, manifests, read: (rel) => contents.get(rel) ?? null };
+  return { label: ref, files: code, manifests, extras, read: (rel) => contents.get(rel) ?? null };
 }
 
 /**

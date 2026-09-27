@@ -1,0 +1,21 @@
+{
+  // Type-checks the CLI (Node) side. The report's browser code has its own config in src/report/client/.
+  // Everything stays plain JavaScript: types come from JSDoc and src/types.d.ts. Run: npm run typecheck
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["es2023"],
+    "types": ["node"],
+    "strict": false,
+    "noImplicitThis": true,
+    "noUnusedLocals": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true
+  },
+  "include": ["bin/**/*.js", "src/*.js", "src/types.d.ts", "scripts/**/*.js", "test/**/*.js", "playwright.config.js"],
+  "exclude": ["src/report/client", "src/report/dist", "node_modules"]
+}

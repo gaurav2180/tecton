@@ -1,0 +1,133 @@
+name: Tecton architecture check
+description: See every shift in your architecture before it becomes a crack. Diffs module dependencies against the base branch, checks boundary rules and comments on the pull request.
+branding:
+  icon: layers
+  color: purple
+
+inputs:
+  working-directory:
+    description: Folder to analyse (where tecton.config.json lives).
+    default: .
+  base:
+    description: Git ref to compare with. Defaults to the pull request's base branch, then main/master.
+    default: ''
+  config:
+    description: Path to the config file, if it is not <working-directory>/tecton.config.json.
+    default: ''
+  strict:
+    description: Fail on every rule break, not only ones this change adds.
+    default: 'false'
+  comment:
+    description: Post the summary as a pull request comment (updated in place on every push).
+    default: 'true'
+  fail-on-break:
+    description: Fail the job when the change adds a rule break with severity "error".
+    default: 'true'
+  upload-report:
+    description: Upload the interactive HTML report as a workflow artifact.
+    default: 'true'
+  report-name:
+    description: Name of the uploaded artifact.
+    default: tecton-report
+  github-token:
+    description: Token used to comment on the pull request.
+    default: ${{ github.token }}
+
+outputs:
+  new-breaks:
+    description: Number of rule breaks (severity "error") this change adds.
+    value: ${{ steps.run.outputs.new-breaks }}
+  failing:
+    description: '"true" when the check fails.'
+    value: ${{ steps.run.outputs.failing }}
+  report-path:
+    description: Path of the HTML report.
+    value: ${{ steps.run.outputs.report-path }}
+  summary-path:
+    description: Path of the Markdown summary.
+    value: ${{ steps.run.outputs.summary-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Compare the architecture with the base branch
+      id: run
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        TECTON_BASE: ${{ inputs.base }}
+        TECTON_CONFIG: ${{ inputs.config }}
+        TECTON_STRICT: ${{ inputs.strict }}
+      run: |
+        out="$RUNNER_TEMP/tecton"
+        mkdir -p "$out"
+        base="$TECTON_BASE"
+        if [ -z "$base" ] && [ -n "$GITHUB_BASE_REF" ]; then base="origin/$GITHUB_BASE_REF"; fi
+        # Tecton compares with the commit your branch split off from, so it needs history
+        if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+          echo "::notice::Shallow clone: fetching history (set fetch-depth: 0 on actions/checkout to skip this)"
+          git fetch --no-tags --quiet --unshallow origin || true
+        fi
+        if [ -n "$GITHUB_BASE_REF" ]; then
+          git fetch --no-tags --quiet origin "+refs/heads/$GITHUB_BASE_REF:refs/remotes/origin/$GITHUB_BASE_REF" || true
+        fi
+        args=(. --head HEAD --out "$out/tecton-report.html" --md "$out/tecton.md" --json "$out/tecton.json")
+        [ -n "$base" ] && args+=(--base "$base")
+        [ -n "$TECTON_CONFIG" ] && args+=(--config "$TECTON_CONFIG")
+        [ "$TECTON_STRICT" = "true" ] && args+=(--strict)
+        set +e
+        node "$GITHUB_ACTION_PATH/bin/tecton.js" "${args[@]}"
+        code=$?
+        set -e
+        if [ "$code" -ge 2 ]; then echo "::error::Tecton could not run (exit $code)"; exit "$code"; fi
+        new=$(node -e "console.log(JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).summary.violations.newErrors)" "$out/tecton.json")
+        {
+          echo "new-breaks=$new"
+          echo "failing=$([ "$code" -eq 1 ] && echo true || echo false)"
+          echo "report-path=$out/tecton-report.html"
+          echo "summary-path=$out/tecton.md"
+        } >> "$GITHUB_OUTPUT"
+        cat "$out/tecton.md" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Upload the HTML report
+      id: upload
+      if: inputs.upload-report == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.report-name }}
+        path: ${{ steps.run.outputs.report-path }}
+        if-no-files-found: warn
+
+    - name: Comment on the pull request
+      if: inputs.comment == 'true' && github.event.pull_request.number
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR: ${{ github.event.pull_request.number }}
+        SUMMARY: ${{ steps.run.outputs.summary-path }}
+        ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+      run: |
+        marker='<!-- tecton-report -->'
+        body="$RUNNER_TEMP/tecton/comment.md"
+        {
+          echo "$marker"
+          cat "$SUMMARY"
+          echo
+          if [ -n "$ARTIFACT_URL" ]; then echo "<sub>Interactive report: [download it from this run]($ARTIFACT_URL) (one HTML file, works offline).</sub>"; fi
+        } > "$body"
+        # update our earlier comment instead of adding a new one on every push
+        id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate --jq ".[] | select(.body | startswith(\"$marker\")) | .id" 2>/dev/null | tail -n 1 || true)
+        if [ -n "$id" ]; then
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F "body=@$body" > /dev/null \
+            || echo "::warning::Could not update the Tecton comment (read-only token on a fork?)"
+        else
+          gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F "body=@$body" > /dev/null \
+            || echo "::warning::Could not comment on the pull request (read-only token on a fork?)"
+        fi
+
+    - name: Fail if the change breaks an architecture rule
+      if: steps.run.outputs.failing == 'true' && inputs.fail-on-break == 'true'
+      shell: bash
+      run: |
+        echo "::error::This change adds ${{ steps.run.outputs.new-breaks }} architecture rule break(s). See the job summary or the report."
+        exit 1

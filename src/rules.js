@@ -9,6 +9,11 @@ import { nameMatches } from './graph.js';
  * Optional "severity": "error" (default, fails CI) or "warn".
  * Top-level "cycles": "warn" (default) | "error" | "off" flags modules that depend on each other in a loop.
  */
+/**
+ * @param {Pick<import('./types.js').Graph, 'modules' | 'edges'>} graph
+ * @param {import('./types.js').Config} cfg
+ * @returns {import('./types.js').Violation[]}
+ */
 export function evaluate(graph, cfg) {
   const rules = (cfg.rules || []).map((r, i) => ({ ...r, key: r.name || `rule ${i + 1}`, severity: r.severity || 'error' }));
   const out = [];

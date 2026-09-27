@@ -1,6 +1,6 @@
 // Turning files + imports into a module-level map ("which part of the app uses which").
 import path from 'node:path';
-import { extractImports, loadAliases, makeResolver } from './scan.js';
+import { extractImports, loadAliases, makeResolver, codeOf } from './scan.js';
 
 const MAX_EVIDENCE = 60;
 
@@ -25,6 +25,8 @@ export function nameMatches(pattern, name) {
   return re.test(name);
 }
 
+const WORKSPACE_DIRS = /^(apps|packages|libs|services|modules|projects|workspaces|sites|tools|plugins)$/;
+
 const DEFAULT_EXCLUDE = ['**/*.test.*', '**/*.spec.*', '**/__tests__/**', '**/__mocks__/**',
   '**/*.stories.*', '**/*.config.*'];
 
@@ -33,6 +35,8 @@ export function makeGrouper(cfg, files) {
   const hasSrc = files.some((f) => f.startsWith('src/'));
   const root = (cfg.root ?? (hasSrc ? 'src' : '')).replace(/^\.\/?/, '').replace(/\/$/, '');
   const depth = cfg.depth ?? 1;
+  // zero config in a monorepo: apps/web and packages/ui are the parts, not "apps" and "packages"
+  const depthFor = (dirs) => (cfg.depth == null && !root && WORKSPACE_DIRS.test(dirs[0]) && dirs.length > 1 ? 2 : depth);
   const exclude = [...DEFAULT_EXCLUDE, ...(cfg.exclude || [])].map(globToRegex);
 
   const explicit = [];
@@ -58,7 +62,7 @@ export function makeGrouper(cfg, files) {
         rel = file.slice(root.length + 1);
       }
       const dirs = path.posix.dirname(rel).split('/').filter((s) => s && s !== '.');
-      return dirs.length ? dirs.slice(0, depth).join('/') : '(root)';
+      return dirs.length ? dirs.slice(0, depthFor(dirs)).join('/') : '(root)';
     },
   };
 }
@@ -66,6 +70,11 @@ export function makeGrouper(cfg, files) {
 /**
  * Build the module graph for one snapshot of the code.
  * Returns { modules: Map<name,{files}>, edges: Map<key,{from,to,external,imports}>, stats }.
+ */
+/**
+ * @param {import('./types.js').Source} source
+ * @param {import('./types.js').Config} cfg
+ * @returns {import('./types.js').Graph}
  */
 export function buildGraph(source, cfg) {
   const fileSet = new Set(source.files);
@@ -76,6 +85,7 @@ export function buildGraph(source, cfg) {
   const edges = new Map();
   const stats = { files: 0, imports: 0, unresolved: 0 };
   const moduleOf = new Map();
+  const fileDeps = new Map(); // file -> Map<target file, first line>, for the per-file drill-down
 
   for (const f of source.files) {
     const m = grouper.moduleOf(f);
@@ -86,9 +96,11 @@ export function buildGraph(source, cfg) {
   }
 
   for (const [file, from] of moduleOf) {
-    const text = source.read(file);
+    const text = codeOf(file, source.read(file));
     if (text == null) continue;
     stats.files++;
+    const deps = new Map();
+    fileDeps.set(file, deps);
     for (const { spec, line } of extractImports(text)) {
       const r = resolve(file, spec);
       let to;
@@ -97,6 +109,7 @@ export function buildGraph(source, cfg) {
         to = moduleOf.get(r.file);
         target = r.file;
         if (!to) continue; // imports something outside the analysed area (tests, configs)
+        if (r.file !== file && !deps.has(r.file)) deps.set(r.file, line);
       } else if (r.kind === 'package') {
         to = `npm:${r.pkg}`;
         target = r.pkg;
@@ -113,5 +126,5 @@ export function buildGraph(source, cfg) {
       if (e.imports.length < MAX_EVIDENCE) e.imports.push({ file, line, spec, target });
     }
   }
-  return { modules, edges, stats, root: grouper.root, moduleOf };
+  return { modules, edges, stats, root: grouper.root, moduleOf, fileDeps };
 }

@@ -2,8 +2,17 @@
 import { nameMatches } from './graph.js';
 import { packagesNamedInRules } from './rules.js';
 
+/** @returns {import('./types.js').Status} */
 const status = (inBase, inCur) => (inBase && inCur ? 'same' : inCur ? 'added' : 'removed');
 
+/**
+ * @param {import('./types.js').Graph} base
+ * @param {import('./types.js').Graph} cur
+ * @param {import('./types.js').Violation[]} baseViol
+ * @param {import('./types.js').Violation[]} curViol
+ * @param {import('./types.js').Config} cfg
+ * @returns {{ nodes: import('./types.js').MapNode[], edges: import('./types.js').MapEdge[], violations: import('./types.js').Violation[], summary: import('./types.js').Summary }}
+ */
 export function diffGraphs(base, cur, baseViol, curViol, cfg) {
   const showPkg = (name) => cfg.externals === true
     || packagesNamedInRules(cfg).some((p) => nameMatches(p, name));
@@ -50,9 +59,10 @@ export function diffGraphs(base, cur, baseViol, curViol, cfg) {
   // ---- rule breaks ----
   const baseIds = new Set(baseViol.map((v) => v.id));
   const curIds = new Set(curViol.map((v) => v.id));
+  /** @type {import('./types.js').Violation[]} */
   const violations = [
-    ...curViol.map((v) => ({ ...v, status: baseIds.has(v.id) ? 'existing' : 'new' })),
-    ...baseViol.filter((v) => !curIds.has(v.id)).map((v) => ({ ...v, status: 'fixed' })),
+    ...curViol.map((v) => ({ ...v, status: baseIds.has(v.id) ? /** @type {const} */ ('existing') : /** @type {const} */ ('new') })),
+    ...baseViol.filter((v) => !curIds.has(v.id)).map((v) => ({ ...v, status: /** @type {const} */ ('fixed') })),
   ];
   const order = { new: 0, existing: 1, fixed: 2 };
   violations.sort((a, b) => order[a.status] - order[b.status] || (a.severity === 'error' ? -1 : 1) - (b.severity === 'error' ? -1 : 1));

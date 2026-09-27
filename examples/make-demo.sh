@@ -71,6 +71,53 @@ cat > tecton.config.json <<'EOF'
   "cycles": "warn"
 }
 EOF
+cat > package.json <<'EOF'
+{ "name": "demo-shop", "private": true, "dependencies": { "next": "15.0.0", "react": "19.0.0", "pg": "8.13.0", "stripe": "17.0.0" } }
+EOF
+# a small API server next to the shop: routers mounted under prefixes, a job queue, env-configured services
+mkdir -p server/routes
+cat > server/package.json <<'EOF'
+{ "name": "api", "private": true, "type": "module",
+  "dependencies": { "express": "4.21.0", "bullmq": "5.12.0", "node-cron": "3.0.3" },
+  "scripts": { "start": "node index.js", "reindex": "node scripts/reindex.js" } }
+EOF
+cat > server/index.js <<'EOF'
+import express from 'express';
+import api from './routes/index.js';
+const app = express();
+app.use(express.json());
+app.use('/api', api);
+app.get('/health', (req, res) => res.send('ok'));
+app.listen(4000);
+EOF
+cat > server/routes/index.js <<'EOF'
+import { Router } from 'express';
+import orders from './orders.js';
+const r = Router();
+r.use('/orders', orders);
+export default r;
+EOF
+cat > server/routes/orders.js <<'EOF'
+import { Router } from 'express';
+import { emails } from '../queues.js';
+const router = Router();
+router.get('/', async (req, res) => res.json(await fetch(`${process.env.SHIPPING_API_URL}/rates`)));
+router.post('/', async (req, res) => { await emails.add('receipt', req.body); res.status(201).end(); });
+router.get('/:id', (req, res) => res.json({ id: req.params.id }));
+export default router;
+EOF
+cat > server/queues.js <<'EOF'
+import { Queue } from 'bullmq';
+export const emails = new Queue('emails', { connection: { url: process.env.REDIS_URL } });
+EOF
+cat > server/.env.example <<'EOF'
+DATABASE_URL=postgres://shop:shop@localhost:5432/shop
+REDIS_URL=redis://localhost:6379
+SHIPPING_API_URL=https://api.shipfast.io/v2
+EOF
+cat > src/services/orders.ts <<'EOF'
+export const listOrders = () => fetch(`${process.env.API_URL}/api/orders`).then((r) => r.json());
+EOF
 git add -A && git commit -qm "initial shop"
 git checkout -qb feature/payments
 cat > src/components/Cart.tsx <<'EOF'
@@ -91,6 +138,31 @@ import { db } from '@/db/client';
 import { charge } from '@/payments/stripe';
 export async function loadCart() { return db.query('select * from cart'); }
 export async function checkout(n: number) { return charge(n); }
+EOF
+cat > server/routes/refunds.js <<'EOF'
+import { Router } from 'express';
+const router = Router();
+router.post('/', async (req, res) => res.json(await fetch(process.env.FRAUD_CHECK_URL, { method: 'POST' })));
+export default router;
+EOF
+cat > server/routes/index.js <<'EOF'
+import { Router } from 'express';
+import orders from './orders.js';
+import refunds from './refunds.js';
+const r = Router();
+r.use('/orders', orders);
+r.use('/refunds', refunds);
+export default r;
+EOF
+cat > server/worker.js <<'EOF'
+import { Worker } from 'bullmq';
+import cron from 'node-cron';
+import { emails } from './queues.js';
+new Worker('emails', async (job) => { /* send the email */ });
+cron.schedule('0 3 * * *', () => emails.add('daily-digest', {}));
+EOF
+cat >> server/.env.example <<'EOF'
+FRAUD_CHECK_URL=
 EOF
 git rm -q src/utils/legacyMoney.ts
 git add -A && git commit -qm "payments"

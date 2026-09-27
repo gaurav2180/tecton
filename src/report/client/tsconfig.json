@@ -1,0 +1,18 @@
+{
+  // Type-checks the report's browser code (bundled by scripts/build.js). Run from the repo root: npm run typecheck
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "es2020",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["es2022", "dom", "dom.iterable"],
+    "types": [],
+    "strict": false,
+    "noImplicitThis": true,
+    "noUnusedLocals": true,
+    "skipLibCheck": true
+  },
+  "include": ["**/*.js", "../../types.d.ts", "../../layout.js"]
+}

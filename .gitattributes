@@ -1,0 +1,5 @@
+# LF everywhere, on every OS: the committed client bundle is compared byte for byte (npm run check:bundle),
+# and the shell scripts must run under bash.
+* text=auto eol=lf
+*.png binary
+*.woff2 binary

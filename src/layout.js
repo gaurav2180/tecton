@@ -15,7 +15,7 @@ export function layout(nodes, edges) {
   const ids = nodes.map((n) => n.id).sort();
   const metaLen = (n) => (n.external ? 11 : (n.filesBase !== n.filesCur ? `${n.filesBase} → ${n.filesCur} files` : `${n.filesCur || n.filesBase || 0} files`).length);
   // box must fit the name (13px sans) and the file-count line (10.5px mono, ~6.4px per char)
-  const width = new Map(nodes.map((n) => [n.id, Math.max(nodeWidth(n.id.replace(/^npm:/, '')), n.filesCur === undefined ? 0 : Math.round(36 + metaLen(n) * 6.4 + 16))]));
+  const width = new Map(nodes.map((n) => [n.id, Math.max(nodeWidth((n.label || n.id).replace(/^npm:/, '')), n.filesCur === undefined ? 0 : Math.round(36 + metaLen(n) * 6.4 + 16))]));
 
   // 1. Break loops: walk the graph depth-first; any arrow pointing back up the walk is flipped for layout.
   const succ = new Map(ids.map((i) => [i, []]));

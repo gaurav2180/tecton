@@ -1,11 +1,11 @@
 # Copy to .github/workflows/tecton.yml in your project.
-# Assumes the tecton folder is committed at tools/tecton (or change the path / use npx once published).
+# Pin a release tag (see https://github.com/gaurav2180/tecton/releases).
 name: tecton
 on: pull_request
 
 permissions:
   contents: read
-  pull-requests: write
+  pull-requests: write # to comment on the pull request
 
 jobs:
   architecture:
@@ -13,32 +13,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # tecton needs the base branch history
+          fetch-depth: 0 # tecton compares with the commit your branch split off from
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Compare architecture with the base branch
-        id: tecton
-        continue-on-error: true
-        run: |
-          node tools/tecton/bin/tecton.js \
-            --base "origin/${{ github.base_ref }}" --head HEAD \
-            --out tecton-report.html --md tecton.md
+      - uses: gaurav2180/tecton@v0.4.0
+        # with:
+        #   working-directory: apps/web   # where tecton.config.json lives
+        #   strict: 'true'                 # fail on existing rule breaks too
+        #   comment: 'false'               # only the job summary + artifact
 
-      - name: Comment on the pull request
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh pr comment "${{ github.event.pull_request.number }}" --body-file tecton.md --edit-last \
-            || gh pr comment "${{ github.event.pull_request.number }}" --body-file tecton.md
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: tecton-report
-          path: tecton-report.html
-
-      - name: Fail if the change breaks an architecture rule
-        if: steps.tecton.outcome == 'failure'
-        run: exit 1
+# Without the action (any CI):
+#   npx tecton@0.4 --base "origin/$BASE_BRANCH" --head HEAD --out tecton-report.html --md tecton.md

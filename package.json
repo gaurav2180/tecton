@@ -1,11 +1,60 @@
 {
   "name": "tecton",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Tecton: see every shift in your architecture before it becomes a crack. Architecture diagrams, before/after diffs and boundary rules for JS/TS codebases.",
+  "homepage": "https://github.com/gaurav2180/tecton#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gaurav2180/tecton.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gaurav2180/tecton/issues"
+  },
+  "author": "gaurav2180",
   "type": "module",
-  "bin": { "tecton": "bin/tecton.js" },
-  "files": ["bin", "src", "brand", "README.md"],
-  "engines": { "node": ">=18" },
-  "scripts": { "test": "node test/run.js" },
-  "license": "MIT"
+  "bin": {
+    "tecton": "bin/tecton.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "!src/report/client",
+    "brand/tecton-favicon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "node scripts/build.js",
+    "dev": "node scripts/build.js --watch",
+    "check:bundle": "node scripts/build.js --check",
+    "typecheck": "tsc -p tsconfig.json && tsc -p src/report/client/tsconfig.json",
+    "test": "node test/run.js",
+    "test:ui": "playwright test",
+    "check": "npm run check:bundle && npm run typecheck && npm test && npm run test:ui",
+    "prepublishOnly": "npm run check:bundle && npm run typecheck && npm test"
+  },
+  "keywords": [
+    "architecture",
+    "dependency-graph",
+    "dependencies",
+    "diagram",
+    "boundaries",
+    "lint",
+    "monorepo",
+    "typescript",
+    "javascript",
+    "ci",
+    "pull-request",
+    "github-action"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.6.3",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
 }

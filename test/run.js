@@ -1,10 +1,10 @@
 // Tiny zero-dependency test runner: `npm test`
 import assert from 'node:assert/strict';
-import { extractImports, stripComments, makeResolver } from '../src/scan.js';
-import { nameMatches, globToRegex, makeGrouper } from '../src/graph.js';
+import { extractImports, stripComments, makeResolver, codeOf, isCode, isExtra } from '../src/scan.js';
+import { nameMatches, globToRegex, makeGrouper, buildGraph } from '../src/graph.js';
 import { evaluate } from '../src/rules.js';
 import { layout } from '../src/layout.js';
-import { detectSystem } from '../src/system.js';
+import { detectSystem, describeCron } from '../src/system.js';
 
 let passed = 0;
 const test = (name, fn) => { try { fn(); passed++; } catch (e) { console.error(`FAIL ${name}\n`, e); process.exitCode = 1; } };
@@ -71,6 +71,15 @@ test('explicit modules match single files and folders', () => {
   assert.equal(g.moduleOf('src/other/b.js'), 'src/other'.split('/')[0]);
 });
 
+test('zero config: a monorepo is grouped by app and package, not by apps/ and packages/', () => {
+  const files = ['apps/web/src/page.tsx', 'apps/api/index.js', 'packages/ui/src/Button.tsx', 'scripts/seed.js', 'index.js'];
+  const g = makeGrouper({}, files);
+  assert.deepEqual(files.map((f) => g.moduleOf(f)), ['apps/web', 'apps/api', 'packages/ui', 'scripts', '(root)']);
+  // an explicit depth, or a src/ folder, keeps the old behaviour
+  assert.equal(makeGrouper({ depth: 1 }, files).moduleOf('apps/web/src/page.tsx'), 'apps');
+  assert.equal(makeGrouper({}, ['src/apps/x/a.ts']).moduleOf('src/apps/x/a.ts'), 'apps');
+});
+
 test('forbid, allow-list and cycle rules', () => {
   const g = graph([['ui', 'db'], ['ui', 'lib'], ['lib', 'svc'], ['svc', 'lib'], ['lib', 'npm:lodash']]);
   const v = evaluate(g, { rules: [{ from: 'ui', to: ['db'] }, { name: 'lib leaf', from: 'lib', allow: [] }] });
@@ -109,6 +118,130 @@ test('system view finds apps, entry points, data and outside services', () => {
   assert.deepEqual(sys.outside.map((x) => x.name).sort(), ['Stripe', 'example-bank.co.in', 'vendor.io']);
   assert.ok(sys.links.some((l) => l.from === 'web' && l.to === '.' && l.kind === 'app'));
   assert.ok(sys.links.some((l) => l.from === 'users' && l.to === 'web'));
+});
+
+const sourceOf = (files) => ({
+  files: Object.keys(files).filter((f) => isCode(f)),
+  manifests: Object.keys(files).filter((f) => f.endsWith('package.json')),
+  extras: Object.keys(files).filter((f) => isExtra(f)),
+  read: (f) => files[f] ?? null,
+});
+const endpoints = (sys, id) => sys.apps.find((a) => a.id === id).groups.endpoints.map((x) => x.key);
+
+test('Express router prefixes are followed across files and local routers', () => {
+  const sys = detectSystem(sourceOf({
+    'server/package.json': JSON.stringify({ dependencies: { express: '4' } }),
+    'server/index.js': `import express from 'express';
+import api from './routes/index.js';
+const app = express();
+const v1 = express.Router();
+v1.get('/ping', f);
+app.use(express.json());
+app.use('/api', auth, api);
+app.use('/v1', v1);
+app.get('/health', h);
+axios.get('/not-a-route');`,
+    'server/routes/index.js': "import { Router } from 'express';\nimport users from './users';\nconst r = Router();\nr.use('/users', users);\nr.get('/', x);\nexport default r;",
+    'server/routes/users.js': "const router = require('express').Router();\nrouter.get('/:id', f);\nrouter.route('/').get(a).post(b);\nmodule.exports = router;",
+  }), null);
+  assert.deepEqual(endpoints(sys, 'server'), ['GET /api', 'GET /api/users', 'GET /api/users/:id', 'GET /health', 'GET /v1/ping', 'POST /api/users']);
+});
+
+test('Fastify register prefixes, route objects, Hono basePath and NestJS decorators', () => {
+  const sys = detectSystem(sourceOf({
+    'fast/package.json': JSON.stringify({ dependencies: { fastify: '4' } }),
+    'fast/app.js': "const app = require('fastify')();\napp.register(require('./items'), { prefix: '/shop' });",
+    'fast/items.js': "module.exports = async (fastify) => { fastify.route({ method: ['GET', 'POST'], url: '/items', handler }); };",
+    'hono/package.json': JSON.stringify({ dependencies: { hono: '4' } }),
+    'hono/index.ts': "import { Hono } from 'hono';\nimport books from './books';\nconst app = new Hono().basePath('/api');\napp.route('/books', books);",
+    'hono/books.ts': "import { Hono } from 'hono';\nconst b = new Hono();\nb.get('/', c);\nexport default b;",
+    'nest/package.json': JSON.stringify({ dependencies: { '@nestjs/core': '10' } }),
+    'nest/src/main.ts': "const app = await NestFactory.create(AppModule);\napp.setGlobalPrefix('api');",
+    'nest/src/users.controller.ts': "@Controller('users')\nexport class Users {\n  @Get() all() {}\n  @Get(':id') one() {}\n  @Post() create(@Body() b) {}\n}",
+  }), null);
+  assert.deepEqual(endpoints(sys, 'fast'), ['GET /shop/items', 'POST /shop/items']);
+  assert.deepEqual(endpoints(sys, 'hono'), ['GET /api/books']);
+  assert.deepEqual(endpoints(sys, 'nest'), ['GET /api/users', 'GET /api/users/:id', 'POST /api/users']);
+});
+
+test('Vue and Svelte files: script blocks are read, Nuxt and SvelteKit routes found', () => {
+  const vue = '<template>\n  <p>import nope from "x"</p>\n</template>\n<script setup lang="ts">\nimport Card from "./Card.vue";\n</script>';
+  assert.deepEqual(extractImports(codeOf('a.vue', vue)), [{ spec: './Card.vue', line: 5 }]);
+  const sys = detectSystem(sourceOf({
+    'nx/package.json': JSON.stringify({ dependencies: { nuxt: '3' } }),
+    'nx/pages/index.vue': vue,
+    'nx/pages/users/[id].vue': '<template/>',
+    'nx/server/api/items.get.ts': 'export default defineEventHandler(() => 1)',
+    'kit/package.json': JSON.stringify({ devDependencies: { '@sveltejs/kit': '2' } }),
+    'kit/src/routes/+page.svelte': '<script>import x from "$lib/x";</script>',
+    'kit/src/routes/(app)/blog/[slug]/+page.svelte': '<h1/>',
+    'kit/src/routes/api/x/+server.ts': 'export const POST = async () => {};',
+  }), null);
+  const g = (id, k) => sys.apps.find((a) => a.id === id).groups[k].map((x) => `${(x.methods || []).join()} ${x.key}`.trim());
+  assert.deepEqual(g('nx', 'pages'), ['/', '/users/[id]']);
+  assert.deepEqual(g('nx', 'api'), ['GET GET /api/items']);
+  assert.deepEqual(g('kit', 'pages'), ['/', '/blog/[slug]']);
+  assert.deepEqual(g('kit', 'api'), ['POST /api/x']);
+});
+
+test('queues, cron schedules and .env.example services', () => {
+  const sys = detectSystem(sourceOf({
+    'package.json': JSON.stringify({ dependencies: { next: '15' } }),
+    'worker/package.json': JSON.stringify({ dependencies: { bullmq: '5', 'node-cron': '3' } }),
+    'worker/jobs.ts': `import { Queue, Worker } from 'bullmq';
+import cron from 'node-cron';
+const EMAILS = 'emails';
+export const q = new Queue<Job>(EMAILS, { connection });
+new Worker('emails', async () => {});
+q.add('digest', {}, { repeat: { pattern: '0 8 * * 1' } });
+cron.schedule('*/15 * * * *', () => {});
+fetch(process.env.PAYMENTS_API_URL);`,
+    'worker/.env.example': 'DATABASE_URL=postgres://u:p@db:5432/app\nSEARCH_API_URL=https://search.vendor.com/v1 # hosted search\nPAYMENTS_API_URL=\nNEXT_PUBLIC_SITE_URL=https://mysite.com\nPORT=3000',
+    'vercel.json': JSON.stringify({ crons: [{ path: '/api/cleanup', schedule: '0 3 * * *' }] }),
+    'app/api/cleanup/route.ts': 'export async function GET() {}',
+  }), null);
+  const w = sys.apps.find((a) => a.id === 'worker');
+  assert.deepEqual(w.groups.schedules.map((x) => [x.label, x.human]), [['*/15 * * * *', 'every 15 minutes'], ['0 8 * * 1', 'every Monday at 08:00']]);
+  assert.deepEqual(sys.apps.find((a) => a.id === '.').groups.schedules.map((x) => [x.human, x.cmd]), [['every day at 03:00', 'calls /api/cleanup']]);
+  assert.deepEqual(sys.stores.map((x) => `${x.name}:${x.kind}`), ['PostgreSQL:Database', 'emails queue:Queue']);
+  const emails = sys.links.find((l) => l.to === 'store:queue-emails');
+  assert.deepEqual(emails.labels.sort(), ['adds jobs', 'runs jobs']);
+  assert.deepEqual(sys.outside.map((x) => `${x.name}:${x.kind}`).sort(), ['Payments API:Set by env var', 'vendor.com:Web / HTTP']);
+  assert.ok(!sys.outside.some((x) => x.name === 'mysite.com'));
+});
+
+test('env vars naming one of our own servers link the apps instead', () => {
+  const sys = detectSystem(sourceOf({
+    'web/package.json': JSON.stringify({ dependencies: { next: '15' } }),
+    'web/lib/api.ts': 'fetch(`${process.env.BACKEND_URL}/x`); fetch(process.env.BILLING_API_URL);',
+    'web/.env.example': 'BACKEND_URL=\nBILLING_API_URL=https://billing.partner.io',
+    'backend/package.json': JSON.stringify({ dependencies: { express: '4' } }),
+    'backend/index.js': "app.get('/x', f);",
+  }), null);
+  assert.ok(sys.links.some((l) => l.from === 'web' && l.to === 'backend' && l.labels[0] === 'HTTP · BACKEND_URL'));
+  assert.deepEqual(sys.outside.map((x) => x.name), ['partner.io']);
+});
+
+test('file-level imports are recorded for the drill-down (including Vue files)', () => {
+  const files = {
+    'src/ui/Card.vue': '<template><b/></template>\n<script setup>\nimport { fmt } from "../lib/fmt";\nimport Badge from "./Badge.vue";\n</script>',
+    'src/ui/Badge.vue': '<script>export default {}</script>',
+    'src/lib/fmt.ts': "import dayjs from 'dayjs';\nexport const fmt = 1;",
+  };
+  const g = buildGraph({ files: Object.keys(files), manifests: [], read: (f) => files[f] ?? null }, {});
+  assert.deepEqual([...g.fileDeps.get('src/ui/Card.vue')], [['src/lib/fmt.ts', 3], ['src/ui/Badge.vue', 4]]);
+  assert.deepEqual([...g.edges.keys()].sort(), ['lib→npm:dayjs', 'ui→lib']);
+});
+
+test('cron expressions in plain words', () => {
+  assert.equal(describeCron('* * * * *'), 'every minute');
+  assert.equal(describeCron('0 * * * *'), 'every hour');
+  assert.equal(describeCron('30 */6 * * *'), 'every 6 hours');
+  assert.equal(describeCron('0 0 9 * * 1-5'), 'weekdays at 09:00');
+  assert.equal(describeCron('0 12 1 * *'), 'every month on day 1 at 12:00');
+  assert.equal(describeCron('*/10 * * * * *'), 'every 10 seconds');
+  assert.equal(describeCron('@daily'), 'every day at midnight');
+  assert.equal(describeCron('5 4 * 2 3'), null);
 });
 
 console.log(`${passed} tests passed${process.exitCode ? ', some FAILED' : ''}`);
