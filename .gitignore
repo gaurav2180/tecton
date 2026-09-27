@@ -1,0 +1,4 @@
+node_modules/
+archdiff-report.html
+*.log
+.DS_Store

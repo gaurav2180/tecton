@@ -1,0 +1,44 @@
+# Copy to .github/workflows/archdiff.yml in your project.
+# Assumes the archdiff folder is committed at tools/archdiff (or change the path / use npx once published).
+name: archdiff
+on: pull_request
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  architecture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # archdiff needs the base branch history
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Compare architecture with the base branch
+        id: archdiff
+        continue-on-error: true
+        run: |
+          node tools/archdiff/bin/archdiff.js \
+            --base "origin/${{ github.base_ref }}" --head HEAD \
+            --out archdiff-report.html --md archdiff.md
+
+      - name: Comment on the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file archdiff.md --edit-last \
+            || gh pr comment "${{ github.event.pull_request.number }}" --body-file archdiff.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archdiff-report
+          path: archdiff-report.html
+
+      - name: Fail if the change breaks an architecture rule
+        if: steps.archdiff.outcome == 'failure'
+        run: exit 1

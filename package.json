@@ -1,0 +1,11 @@
+{
+  "name": "archdiff",
+  "version": "0.2.0",
+  "description": "See how a change reshapes your JS/TS codebase: module map, before/after diff, and architecture rules.",
+  "type": "module",
+  "bin": { "archdiff": "bin/archdiff.js" },
+  "files": ["bin", "src", "README.md"],
+  "engines": { "node": ">=18" },
+  "scripts": { "test": "node test/run.js" },
+  "license": "MIT"
+}
