@@ -51,6 +51,7 @@ One self-contained HTML file (fonts included, works offline) laid out like a sma
   - **Outside services**: hosts in URLs, SDKs such as Stripe, OpenAI and nodemailer, URLs in `.env.example`, and services that are only named by an env var (`FRAUD_CHECK_URL=` becomes "Fraud Check").
   - App-to-app calls are found through env vars like `BACKEND_URL`. New or removed pieces are highlighted, and clicking anything shows every entry point and the exact lines behind it.
 - **Dependency map**: pick **Graph** (layered boxes and arrows), **Matrix** (a dependency structure matrix: rows import columns, loops show as mirrored cells) or **Radial** (modules around a circle, imports as curves; tightly knit groups stand out). Your choice is remembered.
+  Too much at once? **Simple** (next to **Detailed**, on both diagrams) shows only names and arrows, in the same layout.
   Switch between **Changes / Before / After**. Boxes never move between views, so you can flip back and forth.
   Green = new dependency, red dashed = removed, orange = breaks a rule. Numbers on arrows are how many imports.
   - **Only changes** shows just the dependencies that moved.

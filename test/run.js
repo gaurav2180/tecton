@@ -87,6 +87,23 @@ test('forbid, allow-list and cycle rules', () => {
   assert.deepEqual(ids, ['cycle|lib|svc', 'lib leaf|lib|svc', 'rule 1|ui|db']);
 });
 
+test('a loop reports only the imports that close it, not every arrow inside it', () => {
+  // app uses routes, db and lib; routes uses db and lib; db uses lib; lib and db reach back up to app
+  const g = graph([['app', 'routes'], ['app', 'db'], ['app', 'lib'], ['routes', 'db'], ['routes', 'lib'], ['db', 'lib'], ['lib', 'app'], ['db', 'app']]);
+  const [loop] = evaluate(g, { cycles: 'warn' });
+  assert.equal(loop.id, 'cycle|app|db|lib|routes');
+  assert.deepEqual(loop.edges, ['db→app', 'lib→app']);
+});
+
+test('layout spreads arrows that share a side of a box', () => {
+  const nodes = ['a', 'b', 'c', 'd'].map((id) => ({ id }));
+  const edges = [['a', 'b'], ['a', 'c'], ['a', 'd']].map(([from, to]) => ({ id: `${from}→${to}`, from, to }));
+  const { routes } = layout(nodes, edges);
+  const starts = edges.map((e) => routes[e.id][0][0]);
+  assert.equal(new Set(starts).size, 3, 'each arrow leaves a from a different point');
+  assert.deepEqual([...starts].sort((x, y) => x - y), edges.map((e) => routes[e.id][0][0]).sort((x, y) => x - y));
+});
+
 test('layout is deterministic and handles cycles', () => {
   const nodes = ['a', 'b', 'c', 'd'].map((id) => ({ id }));
   const edges = [['a', 'b'], ['b', 'c'], ['c', 'a'], ['a', 'd']].map(([from, to]) => ({ id: `${from}→${to}`, from, to }));

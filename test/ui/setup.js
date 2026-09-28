@@ -43,6 +43,25 @@ function bigRepo(dir) {
   });
 }
 
+/** One big loop, like many real apps: shared code in lib/, gmp/ and registrars/ imports config.js from the root folder. */
+function loopsRepo(dir) {
+  const imp = (list) => `${list.map((x, i) => `import x${i} from '${x}';`).join('\n')}\nexport default 1;\n`;
+  const files = {
+    'package.json': JSON.stringify({ name: 'loops', dependencies: { express: '4' } }),
+    'src/index.js': imp(['./routes/a.js', './routes/b.js', './db/a.js', './gmp/a.js', './gmp/b.js', './registrars/a.js', './registrars/b.js', './registrars/c.js', './lib/a.js', './lib/b.js']),
+    'src/app.js': imp(['./routes/a.js', './routes/c.js', './db/a.js', './lib/c.js', './lib/d.js']),
+    'src/config.js': imp(['./lib/a.js']),
+    'src/server.js': imp(['./app.js', './gmp/a.js', './lib/e.js']),
+    'src/market/m.js': imp(['../index.js', '../lib/a.js']),
+  };
+  for (const f of 'abc') files[`src/routes/${f}.js`] = imp(['../index.js', '../db/a.js', '../db/b.js', '../gmp/a.js', '../registrars/a.js', '../registrars/b.js', '../lib/a.js']);
+  for (const f of 'ab') files[`src/db/${f}.js`] = imp(['../lib/a.js']);
+  for (const f of 'abc') files[`src/gmp/${f}.js`] = imp(['../lib/a.js', '../lib/b.js', '../config.js']);
+  for (const f of 'abcd') files[`src/registrars/${f}.js`] = imp(['../lib/c.js', '../config.js']);
+  for (const f of 'abcdefghij') files[`src/lib/${f}.js`] = imp(['../config.js']);
+  write(dir, files);
+}
+
 function tecton(dir, out) {
   try {
     execFileSync(process.execPath, [path.join(repo, 'bin', 'tecton.js'), dir, '--out', out, '--json', out.replace(/\.html$/, '.json')], { stdio: 'pipe' });
@@ -60,4 +79,7 @@ export default function setup() {
   const big = path.join(FIXTURES, 'big');
   bigRepo(big);
   tecton(big, path.join(FIXTURES, 'big.html'));
+  const loops = path.join(FIXTURES, 'loops');
+  loopsRepo(loops);
+  tecton(loops, path.join(FIXTURES, 'loops.html'));
 }

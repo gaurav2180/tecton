@@ -5,7 +5,7 @@
 import { $$, h, s, short } from '../lib/dom.js';
 import { D, edgesById, hasBase, state } from '../lib/data.js';
 import { hideTip, showTip } from '../ui/common.js';
-import { activeViol, edgeTip, nodeTip, present, select } from './map.js';
+import { edgeTip, nodeTip, present, select, violLevel } from './map.js';
 
 /** @typedef {import('../../../types').MapNode} MapNode @typedef {import('../../../types').MapEdge} MapEdge */
 
@@ -23,7 +23,9 @@ const inDiff = () => state.view === 'diff' && hasBase;
 /** @param {MapEdge} e */
 const countOf = (e) => (state.view === 'base' ? e.countBase : state.view === 'cur' ? e.countCur : e.status === 'removed' ? e.countBase : e.countCur);
 /** @param {MapEdge} e */
-const isViol = (e) => activeViol().has(e.id) && !(inDiff() && e.status === 'removed');
+const levelOf = (e) => (inDiff() && e.status === 'removed' ? null : violLevel(e.id));
+/** @param {MapEdge} e */
+const isViol = (e) => levelOf(e) === 'error';
 const selEdge = () => (state.selected && state.selected.type === 'edge' ? state.selected.id : null);
 const selNode = () => (state.selected && state.selected.type === 'node' ? state.selected.id : null);
 
@@ -40,7 +42,7 @@ function renderMatrix(box) {
       if (!e || !present(e.status)) return h('td', { class: 'mx-empty', dataset: { c: j } });
       const st = inDiff() ? e.status : 'same';
       const back = edgesById.get(`${c.id}→${r.id}`);
-      const loop = back && present(back.status) && !c.external && !r.external;
+      const loop = (back && present(back.status) && !c.external && !r.external) || levelOf(e) === 'warn';
       const changed = inDiff() && e.status === 'same' && e.countBase !== e.countCur;
       const cls = `mx-cell ${st}${isViol(e) ? ' viol' : ''}${loop ? ' loop' : ''}${changed ? ' chg' : ''}${se === e.id ? ' sel' : ''}${sn && sn !== r.id && sn !== c.id ? ' dim' : ''}`;
       return h('td', {
@@ -89,7 +91,7 @@ function renderRadial(box) {
   const svg = s('svg', { class: 'radial', viewBox: `${-S / 2} ${-S / 2} ${S} ${S}`, preserveAspectRatio: 'xMidYMid meet', role: 'group', 'aria-label': 'Radial dependency view' });
   const defs = s('defs');
   // own arrowheads: the graph's live in an SVG that is hidden while this view is shown
-  defs.innerHTML = ['line', 'add', 'rem', 'viol', 'accent'].map((k) => `<marker id="rd-arr-${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M1,1.5 L9,5 L1,8.5 Q2.5,5 1,1.5 z" style="fill: var(--${k})"/></marker>`).join('');
+  defs.innerHTML = ['line', 'add', 'rem', 'viol', 'warn', 'accent'].map((k) => `<marker id="rd-arr-${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M1,1.5 L9,5 L1,8.5 Q2.5,5 1,1.5 z" style="fill: var(--${k})"/></marker>`).join('');
   svg.appendChild(defs);
   svg.appendChild(s('circle', { class: 'rd-ring', r: R }));
   const sn = selNode(); const se = selEdge();
@@ -105,9 +107,10 @@ function renderRadial(box) {
     const d = `M${(a.x * k).toFixed(1)},${(a.y * k).toFixed(1)} Q${((a.x + b.x) * 0.12).toFixed(1)},${((a.y + b.y) * 0.12).toFixed(1)} ${(b.x * k).toFixed(1)},${(b.y * k).toFixed(1)}`;
     const st = inDiff() ? e.status : 'same';
     const viol = present(e.status) && isViol(e);
+    const warn = present(e.status) && !viol && levelOf(e) === 'warn';
     const on = se === e.id || (sn && (e.from === sn || e.to === sn));
-    const g = s('g', { class: `edge ${st}${viol ? ' viol' : ''}${present(e.status) ? '' : ' gone'}${se === e.id ? ' sel' : ''}${(sn || se) && !on ? ' dim' : ''}`, dataset: { from: e.from, to: e.to } },
-      s('path', { class: 'line', d, 'marker-end': `url(#rd-arr-${se === e.id ? 'accent' : viol ? 'viol' : st === 'added' ? 'add' : st === 'removed' ? 'rem' : 'line'})` }),
+    const g = s('g', { class: `edge ${st}${viol ? ' viol' : warn ? ' warnv' : ''}${present(e.status) ? '' : ' gone'}${se === e.id ? ' sel' : ''}${(sn || se) && !on ? ' dim' : ''}`, dataset: { from: e.from, to: e.to } },
+      s('path', { class: 'line', d, 'marker-end': `url(#rd-arr-${se === e.id ? 'accent' : viol ? 'viol' : warn ? 'warn' : st === 'added' ? 'add' : st === 'removed' ? 'rem' : 'line'})` }),
       s('path', { class: 'hit', d }));
     g.addEventListener('click', (ev) => { ev.stopPropagation(); select({ type: 'edge', id: e.id }); });
     g.addEventListener('pointermove', (ev) => showTip(ev, edgeTip(e)));

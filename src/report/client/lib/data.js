@@ -88,6 +88,7 @@ const PAGES = [
 const state = {
   page: 'overview', view: hasBase ? 'diff' : 'cur', selected: null, focusOnly: false, touchedOnly: false,
   mapView: store.get('mapView') || 'graph', archView: store.get('archView') || 'diagram',
+  detail: store.get('detail') === 'simple' ? 'simple' : 'full',
 };
 
 export { D, S, V, hasBase, nodesById, edgesById, violById, violEdges, pushTo, failing, curViols, isChange, changeKind, internalNodes, nodeStats, rules, changes, FG, FST, FILES, fileByPath, filesOf, touchedMods, canScope, fileKind, kindOrder, PAGES, state };

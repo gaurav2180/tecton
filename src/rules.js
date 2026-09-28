@@ -36,11 +36,10 @@ export function evaluate(graph, cfg) {
   const cycleMode = cfg.cycles ?? 'warn';
   if (cycleMode !== 'off') {
     for (const scc of stronglyConnected(graph)) {
-      const members = new Set(scc);
-      const edgeKeys = [...graph.edges.values()]
-        .filter((e) => members.has(e.from) && members.has(e.to))
-        .map((e) => `${e.from}→${e.to}`).sort();
       const sorted = [...scc].sort();
+      // Only the dependencies that close the loop are reported (removing them breaks it); flagging every
+      // arrow inside a big loop would paint the whole map and hide which imports to fix.
+      const edgeKeys = loopClosers(graph, scc);
       out.push({
         id: `cycle|${sorted.join('|')}`,
         kind: 'cycle', rule: 'No circular dependencies', message: null, severity: cycleMode,
@@ -50,6 +49,35 @@ export function evaluate(graph, cfg) {
     }
   }
   return out;
+}
+
+/**
+ * The dependencies that close a loop: walk the group from its most "top-level" module (uses the most,
+ * is used the least) down; an arrow back to a module still on the walk points up and closes a loop.
+ * Removing these breaks every loop in the group. Deterministic: ties go by name.
+ * @param {Pick<import('./types.js').Graph, 'edges'>} graph
+ * @param {string[]} scc
+ * @returns {string[]} edge keys "from→to", sorted
+ */
+export function loopClosers(graph, scc) {
+  const members = new Set(scc);
+  const inner = [...graph.edges.values()].filter((e) => members.has(e.from) && members.has(e.to));
+  const rank = new Map(scc.map((m) => [m, 0]));
+  for (const e of inner) { rank.set(e.from, rank.get(e.from) + 1); rank.set(e.to, rank.get(e.to) - 1); }
+  const byRank = (a, b) => rank.get(b) - rank.get(a) || (a < b ? -1 : 1);
+  const next = new Map(scc.map((m) => [m, inner.filter((e) => e.from === m).map((e) => e.to).sort(byRank)]));
+  const state = new Map(); // 1 = on the walk, 2 = done
+  const closers = [];
+  const walk = (v) => {
+    state.set(v, 1);
+    for (const w of next.get(v)) {
+      if (state.get(w) === 1) closers.push(`${v}→${w}`);
+      else if (!state.get(w)) walk(w);
+    }
+    state.set(v, 2);
+  };
+  for (const v of [...scc].sort(byRank)) if (!state.get(v)) walk(v);
+  return closers.sort();
 }
 
 /** Tarjan's algorithm over internal modules; returns groups of 2+ modules that form a loop. */

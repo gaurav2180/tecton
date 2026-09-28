@@ -1,6 +1,6 @@
 // Small shared UI pieces: tabs, badges, evidence lists, count-up numbers and the tooltip.
-import { $, $$, h, reduceMotion } from '../lib/dom.js';
-import { hasBase } from '../lib/data.js';
+import { $, $$, h, reduceMotion, store } from '../lib/dom.js';
+import { hasBase, state } from '../lib/data.js';
 
 // ------------------------------------------------------------------ small UI factories
 function tabs(options, value, onChange) {
@@ -71,4 +71,22 @@ function showTip(ev, html) {
 }
 function hideTip() { tip.classList.remove('show'); }
 
-export { tabs, placeTabs, statusBadge, ruleStateBadge, violBadge, kindBadge, evidence, countUp, tip, showTip, hideTip };
+
+// ------------------------------------------------------------------ level of detail (both diagrams)
+const DETAIL = [{ value: 'full', label: 'Detailed' }, { value: 'simple', label: 'Simple' }];
+/** Detailed shows every label and line of text; Simple shows names and arrows only. Nothing moves. */
+function setDetail(v, quiet) {
+  state.detail = v === 'simple' ? 'simple' : 'full';
+  if (!quiet) store.set('detail', state.detail);
+  document.documentElement.classList.toggle('detail-simple', state.detail === 'simple');
+  document.querySelectorAll('.detail-tabs').forEach((t) => /** @type {any} */ (t)._set && /** @type {any} */ (t)._set(state.detail));
+}
+/** The Detailed / Simple switch; every copy stays in sync. */
+function detailTabs() {
+  const t = tabs(DETAIL, state.detail, (v) => setDetail(v));
+  t.classList.add('detail-tabs');
+  t.setAttribute('aria-label', 'Level of detail');
+  return t;
+}
+
+export { DETAIL, setDetail, detailTabs, tabs, placeTabs, statusBadge, ruleStateBadge, violBadge, kindBadge, evidence, countUp, tip, showTip, hideTip };

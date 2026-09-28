@@ -1,7 +1,7 @@
 // Dependency map page: layout rendering, drawer, pan/zoom, minimap and intro animation.
 import { $, $$, ICONS, esc, h, icon, plural, reduceMotion, s, short, store } from '../lib/dom.js';
 import { D, canScope, edgesById, fileByPath, hasBase, isChange, nodeStats, nodesById, state, touchedMods, violById, violEdges } from '../lib/data.js';
-import { evidence, hideTip, kindBadge, showTip, statusBadge, tabs, violBadge } from '../ui/common.js';
+import { detailTabs, evidence, hideTip, kindBadge, showTip, statusBadge, tabs, violBadge } from '../ui/common.js';
 import { exportSvg } from '../ui/export.js';
 import { goModule } from './module.js';
 import { go } from '../ui/router.js';
@@ -33,11 +33,15 @@ function samplePath(pts) {
   let len = 0;
   const cum = [0];
   for (let i = 1; i < out.length; i++) { len += Math.hypot(out[i][0] - out[i - 1][0], out[i][1] - out[i - 1][1]); cum.push(len); }
-  const half = len / 2;
-  let j = cum.findIndex((c) => c >= half);
-  if (j < 1) j = 1;
-  const f = (half - cum[j - 1]) / ((cum[j] - cum[j - 1]) || 1);
-  return { len, mid: [out[j - 1][0] + (out[j][0] - out[j - 1][0]) * f, out[j - 1][1] + (out[j][1] - out[j - 1][1]) * f] };
+  /** the point a fraction `t` of the way along the curve */
+  const at = (t) => {
+    const want = len * t;
+    let j = cum.findIndex((c) => c >= want);
+    if (j < 1) j = 1;
+    const f = (want - cum[j - 1]) / ((cum[j] - cum[j - 1]) || 1);
+    return [out[j - 1][0] + (out[j][0] - out[j - 1][0]) * f, out[j - 1][1] + (out[j][1] - out[j - 1][1]) * f];
+  };
+  return { len, mid: at(0.5), at };
 }
 
 function renderMap() {
@@ -58,7 +62,8 @@ function renderMap() {
     h('i', { class: 'tdot-key', 'aria-hidden': 'true' }), 'Only touched') : null;
   const legendItem = (cls, label) => h('span', null, s('svg', { viewBox: '0 0 22 8' }, s('g', { class: `edge ${cls}` }, s('path', { class: 'line', d: 'M1,4 L21,4' }))), label);
   const legend = h('div', { class: 'legend-float glass' },
-    legendItem('same', 'Unchanged'), hasBase ? legendItem('added', 'New') : null, hasBase ? legendItem('removed', 'Removed') : null, legendItem('viol', 'Breaks a rule'));
+    legendItem('same', 'Unchanged'), hasBase ? legendItem('added', 'New') : null, hasBase ? legendItem('removed', 'Removed') : null, legendItem('viol', 'Breaks a rule'),
+    D.violations.some((v) => v.severity !== 'error') ? legendItem('warnv', 'Loop / warning') : null);
   const pct = h('div', { class: 'pct', id: 'zoom-pct', text: '100%' });
   const zoomCtl = h('div', { class: 'zoom glass' },
     h('button', { 'aria-label': 'Zoom in', 'data-tip': 'Zoom in', on: { click: () => zoom(1 / 1.3) } }, icon('plus')),
@@ -72,7 +77,7 @@ function renderMap() {
   const drawer = h('aside', { class: 'drawer', id: 'drawer', 'aria-label': 'Details' });
   const alt = h('div', { class: 'map-alt', id: 'map-alt' });
   pg.append(h('div', { class: 'card map-card', id: 'map-card' }, stage, alt,
-    h('div', { class: 'float tl', id: 'map-float' }, h('div', { class: 'glass', style: { padding: '0', borderRadius: '11px' } }, kindTabs), h('div', { class: 'glass', style: { padding: '0', borderRadius: '11px' } }, viewTabs), focusSw, touchedSw, legend),
+    h('div', { class: 'float tl', id: 'map-float' }, h('div', { class: 'glass', style: { padding: '0', borderRadius: '11px' } }, kindTabs), h('div', { class: 'glass', style: { padding: '0', borderRadius: '11px' } }, viewTabs), h('div', { class: 'glass graph-only', style: { padding: '0', borderRadius: '11px' } }, detailTabs()), focusSw, touchedSw, legend),
     h('div', { class: 'float br' }, zoomCtl),
     h('div', { class: 'float bl' }, minimap),
     drawer));
@@ -105,7 +110,7 @@ function buildGraph(svg) {
   const defs = s('defs');
   defs.innerHTML = '<filter id="nshadow" x="-20%" y="-30%" width="140%" height="170%"><feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#101018" flood-opacity=".08"/></filter>'
     + '<pattern id="dots" width="18" height="18" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" style="fill: var(--dot)"/></pattern>';
-  ['line', 'add', 'rem', 'viol', 'accent'].forEach((k) => {
+  ['line', 'add', 'rem', 'viol', 'warn', 'accent'].forEach((k) => {
     const m = s('marker', { id: `arr-${k}`, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 10, markerHeight: 10, orient: 'auto-start-reverse', markerUnits: 'userSpaceOnUse' });
     m.appendChild(s('path', { d: 'M1,1.5 L9,5 L1,8.5 Q2.5,5 1,1.5 z', style: `fill: var(--${k})` }));
     defs.appendChild(m);
@@ -120,22 +125,30 @@ function buildGraph(svg) {
   svg.appendChild(world);
 
   const maxY = Math.max(1, D.height);
+  // labels: on each arrow, at the first spot (middle first) clear of the boxes and of labels placed before
+  const LW = 44; const LH = 18;
+  const boxes = D.nodes.map((n) => ({ x: n.pos.x - 4, y: n.pos.y - 4, w: n.pos.w + 8, h: n.pos.h + 8 }));
+  const placed = [];
+  const clear = (r) => ![...boxes, ...placed].some((o) => r.x < o.x + o.w && r.x + r.w > o.x && r.y < o.y + o.h && r.y + r.h > o.y);
+  const spots = new Map();
+  [...D.edges].sort((a, b) => (a.id < b.id ? -1 : 1)).forEach((e) => {
+    const { at, mid } = samplePath(e.points);
+    let p = mid;
+    for (const t of [0.5, 0.38, 0.62, 0.28, 0.72, 0.2, 0.8]) {
+      const q = at(t);
+      if (clear({ x: q[0] - LW / 2, y: q[1] - LH / 2, w: LW, h: LH })) { p = q; break; }
+    }
+    placed.push({ x: p[0] - LW / 2, y: p[1] - LH / 2, w: LW, h: LH });
+    spots.set(e.id, p);
+  });
   D.edges.forEach((e, i) => {
     const d = pathD(e.points);
-    const { len, mid } = samplePath(e.points);
+    const { len } = samplePath(e.points);
+    const mid = spots.get(e.id);
     const g = s('g', { class: 'edge', style: `--len:${Math.ceil(len)};--d:${(e.points[0][1] / maxY) * 0.6 + 0.15}s` });
-    g.appendChild(s('path', { class: 'glow', d }));
     const line = s('path', { class: 'line', d, id: `ep${i}` });
     g.appendChild(line);
     g.appendChild(s('path', { class: 'hit', d }));
-    const needsFlow = e.status === 'added' || violEdges.cur.has(e.id);
-    if (needsFlow && !reduceMotion) {
-      const dot = s('circle', { class: 'flow', r: 2.6 });
-      const am = s('animateMotion', { dur: `${Math.max(1.6, len / 70).toFixed(2)}s`, repeatCount: 'indefinite', rotate: 'auto' });
-      am.appendChild(s('mpath', { href: `#ep${i}` }));
-      dot.appendChild(am);
-      g.appendChild(dot);
-    }
     edgeLayer.appendChild(g);
     const wrap = s('g', { class: 'edge' });
     const lg = s('g', { class: 'lbl', transform: `translate(${mid[0].toFixed(1)},${mid[1].toFixed(1)})` });
@@ -189,6 +202,12 @@ function present(status) {
   return state.view === 'base' ? status !== 'added' : status !== 'removed';
 }
 const activeViol = () => (state.view === 'base' ? violEdges.base : violEdges.cur);
+/** 'error' when a dependency breaks a rule, 'warn' when it is only in a loop or breaks a warn-level rule, else null. */
+const violLevel = (id) => {
+  const vs = activeViol().get(id);
+  if (!vs || !vs.length) return null;
+  return vs.some((v) => v.severity === 'error') ? 'error' : 'warn';
+};
 
 function applyMap() {
   if (!map.built) return;
@@ -219,22 +238,25 @@ function applyMap() {
     const E = map.edgeEls.get(e.id);
     const show = present(e.status);
     const st = state.view === 'diff' ? e.status : 'same';
-    const viol = av.has(e.id) && show && !(state.view === 'diff' && e.status === 'removed');
+    // a rule break (error) is strong orange; a loop or other warning is a quiet amber
+    const level = show && !(state.view === 'diff' && e.status === 'removed') ? violLevel(e.id) : null;
+    const viol = level === 'error';
     if (viol) { violNodes.add(e.from); violNodes.add(e.to); }
     const isSel = sel && sel.type === 'edge' && sel.id === e.id;
     const extra = E.g.classList.contains('draw-in') ? ' draw-in' : '';
-    const cls = `edge ${st}${viol ? ' viol' : ''}${isSel ? ' sel' : ''}${!show ? ' gone' : ''}${keepE && !keepE.has(e.id) ? ' dim' : ''}`;
-    E.g.setAttribute('class', cls + extra);
-    E.lbl.setAttribute('class', cls);
-    const mk = isSel ? 'accent' : viol ? 'viol' : st === 'added' ? 'add' : st === 'removed' ? 'rem' : 'line';
-    E.line.setAttribute('marker-end', `url(#arr-${mk})`);
     let txt;
     if (state.view === 'diff') {
       if (e.status === 'added') txt = `+${e.countCur}`;
       else if (e.status === 'removed') txt = `−${e.countBase}`;
       else txt = e.countBase === e.countCur ? String(e.countCur) : `${e.countBase}→${e.countCur}`;
     } else txt = String(state.view === 'base' ? e.countBase : e.countCur);
-    if (viol) txt = `⚠ ${txt}`;
+    // a label only when it tells you something: several imports, or what changed
+    const quiet = txt === '1';
+    const cls = `edge${e.external ? ' ext' : ''} ${st}${viol ? ' viol' : level === 'warn' ? ' warnv' : ''}${isSel ? ' sel' : ''}${!show ? ' gone' : ''}${keepE && !keepE.has(e.id) ? ' dim' : ''}`;
+    E.g.setAttribute('class', cls + extra);
+    E.lbl.setAttribute('class', `${cls}${quiet && !isSel ? ' nolbl' : ''}`);
+    const mk = isSel ? 'accent' : viol ? 'viol' : level === 'warn' ? 'warn' : st === 'added' ? 'add' : st === 'removed' ? 'rem' : 'line';
+    E.line.setAttribute('marker-end', `url(#arr-${mk})`);
     E.lt.textContent = txt;
     const w = Math.max(20, txt.length * 6.3 + 12);
     E.lr.setAttribute('width', w); E.lr.setAttribute('x', -w / 2);
@@ -373,12 +395,14 @@ function fitTo(x0, y0, x1, y1, pad, animate) {
   const r = stageRect();
   const W = Math.max(1, r.width); const H = Math.max(1, r.height);
   const drawerW = state.selected && $('#drawer').classList.contains('open') && W > 700 ? Math.min(400, W) : 0;
-  const topPad = 64;
-  const cw = (x1 - x0) + pad * 2; const ch = (y1 - y0) + pad * 2 + topPad;
-  const sc = Math.max(cw / (W - drawerW), ch / H, 0.55);
+  // screen pixels taken by the floating toolbar, which wraps onto several rows on a phone
+  const fl = $('#map-float');
+  const topPad = fl && fl.offsetHeight ? fl.offsetTop + fl.offsetHeight + 8 : 64;
+  const cw = (x1 - x0) + pad * 2; const ch = (y1 - y0) + pad * 2;
+  const sc = Math.max(cw / (W - drawerW), ch / Math.max(80, H - topPad), 0.55);
   const target = { w: W * sc, h: H * sc };
   target.x = (x0 + x1) / 2 - ((W - drawerW) * sc) / 2;
-  target.y = (y0 + y1) / 2 - target.h / 2 - (topPad / 2) * sc; // leave room for the floating toolbar
+  target.y = (y0 + y1) / 2 - (topPad + (H - topPad) / 2) * sc; // centred in the space below the toolbar
   animateVB(target, animate);
 }
 let vbAnim = null;
@@ -495,4 +519,4 @@ function introAnimation() {
   }, 1900);
 }
 
-export { setMapView, placeAlt, map, pathD, samplePath, renderMap, buildGraph, present, activeViol, applyMap, nodeTip, edgeTip, renderDrawer, select, goSelect, setVB, stageRect, fitTo, vbAnim, animateVB, fit, revealSelection, zoom, wirePanZoom, buildMinimap, updateMinimapViewport, updateMinimapClasses, introAnimation };
+export { setMapView, placeAlt, violLevel, map, pathD, samplePath, renderMap, buildGraph, present, activeViol, applyMap, nodeTip, edgeTip, renderDrawer, select, goSelect, setVB, stageRect, fitTo, vbAnim, animateVB, fit, revealSelection, zoom, wirePanZoom, buildMinimap, updateMinimapViewport, updateMinimapClasses, introAnimation };

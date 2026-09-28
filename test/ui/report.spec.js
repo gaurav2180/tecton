@@ -48,6 +48,12 @@ test.describe('every page renders and matches its screenshot', () => {
       await expect(page).toHaveScreenshot(`demo-${hash}-${view.toLowerCase()}.png`, { mask: unversioned(page) });
     });
   }
+  test('loops repo · only the imports that close the loop stand out', async ({ page }) => {
+    await open(page, 'loops', 'map');
+    await expect(page.locator('#map-svg .edge.warnv path.line')).toHaveCount(4); // gmp, lib, registrars → (root) and one side of (root) ↔ routes
+    await expect(page.locator('#map-svg .edge.viol')).toHaveCount(0);
+    await expect(page).toHaveScreenshot('loops-map.png', { mask: unversioned(page) });
+  });
   test('big repo · architecture diagram', async ({ page }) => {
     await open(page, 'big', 'system');
     await expect(page.locator('#arch-svg .an')).toHaveCount(4 + 6 + 11 + 1); // apps, stores, outside systems, users
@@ -127,6 +133,20 @@ test.describe('interactions', () => {
     await page.locator('.amx td[title^="server → Redis"]').click();
     await expect(page.locator('#sheet')).toHaveClass(/open/);
     await expect(page.locator('#sheet h3')).toHaveText('Redis');
+  });
+
+  test('Simple detail: names and arrows only, on both diagrams, remembered', async ({ page }) => {
+    await open(page, 'demo', 'map');
+    await page.locator('#map-float .detail-tabs button', { hasText: 'Simple' }).click();
+    await expect(page.locator('#map-svg .node[aria-label="npm:pg"]')).toBeHidden();
+    await expect(page.locator('#map-svg .lbl').first()).toBeHidden();
+    await expect(page.locator('#map-svg .node[aria-label="db"]')).toBeVisible();
+    await page.goto(page.url().replace(/#.*$/, '#system'));
+    await expect(page.locator('#page-system .detail-tabs button[aria-pressed="true"]')).toHaveText('Simple');
+    await expect(page.locator('#arch-svg .an[data-node="server"] .an-simple')).toBeVisible();
+    await expect(page.locator('#arch-svg .an[data-node="server"] .an-full')).toBeHidden();
+    await expect(page.locator('#arch-svg .aw-lbl').first()).toBeHidden();
+    await expect(page).toHaveScreenshot('demo-system-simple.png', { mask: unversioned(page) });
   });
 
   test('architecture tiers: Before hides what the branch added', async ({ page }) => {

@@ -102,6 +102,14 @@ The logo system lives in `brand/`. Its source of truth is the "Tecton logo" desi
   - The default view stays built underneath the others (hidden, not destroyed) so its zoom survives a switch.
   - The other views are re-rendered from scratch by `renderMapAlt` / `renderArchAlt` on every view, selection or Changes/Before/After change.
   - Add a new kind by adding it to `MAP_VIEWS` / `ARCH_VIEWS` and a branch in the render function. It must follow `present()`/statuses and open the same drawer/sheet.
+- **Dependency map visual rules** (after users found the loop-heavy map ugly):
+  - Only rule breaks with severity "error" are strong orange. Loops and warn-level rules are thin amber (`.warnv`, via `violLevel()`).
+  - A loop reports only the imports that close it (`loopClosers()` in `rules.js`), not every arrow inside it.
+  - Arrows sharing a side of a box are spread along it (`layout.js`).
+  - Labels are hidden when the count is 1 and nothing changed, and are placed clear of boxes and other labels.
+  - No glow and no moving dots on any diagram.
+  - The `loops` UI fixture guards this.
+- **Level of detail:** `state.detail` (`full`|`simple`), set by `setDetail()` in `ui/common.js`, toggles `html.detail-simple`. CSS then hides labels, meta lines and npm boxes; architecture boxes swap `.an-full` for `.an-simple` (centred name). Shapes and positions never change.
 - **No decorative accent stripes** (coloured top/left bars on cards, rows or nav items). The user found them "AI slop". Show state with background tint, icon colour or a badge instead.
 - A module page (`#module:<name>`, `renderModule`, not in `PAGES`/the nav) shows that module's files as a diagram (`fileGraph` → `drawFileMap` → `applyFileMap`), a files table, and a per-file `#sheet` (`openFileSheet`). Open it with `goModule(id, file?)`.
 - `state.touchedOnly` / `touchedMods` drive the map's "Only touched" filter. Edited files use the indigo accent (`.tdot`, `chip acc`, `badge acc`), because blue `--chg` already means "import count changed".

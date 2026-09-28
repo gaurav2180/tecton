@@ -2,7 +2,7 @@
 import { $, $$, ICONS, esc, h, icon, plural, reduceMotion, s, store } from '../lib/dom.js';
 import { D, hasBase, state } from '../lib/data.js';
 import { toast } from '../ui/shell.js';
-import { hideTip, kindBadge, placeTabs, showTip, tabs } from '../ui/common.js';
+import { detailTabs, hideTip, kindBadge, placeTabs, showTip, tabs } from '../ui/common.js';
 import { applyMap, goSelect, present } from './map.js';
 import { exportSvgFrom } from '../ui/export.js';
 import { modState, renderModule, selectFile } from './module.js';
@@ -373,6 +373,12 @@ function archNode(n) {
       txt('an-name', 44, 29, n.name), txt('an-kind', 16, 52, `[${n.kind}]`));
     if (n.sub) g.append(txt('an-sub mono', 16, 69, n.sub));
   }
+  // Simple detail: the same shape with only its name, centred. The detailed text moves into one group
+  // so CSS can swap the two (html.detail-simple); the shape never changes, so nothing moves.
+  const full = s('g', { class: 'an-full' });
+  [...g.children].filter((el) => !/\ban-(shape|lid)\b/.test(el.getAttribute('class') || '')).forEach((el) => full.appendChild(el));
+  const bodyTop = n.type === 'person' ? 44 : 0;
+  g.append(full, s('g', { class: 'an-simple' }, txt('an-name', w / 2, bodyTop + (h - bodyTop) / 2 + 5, n.name, 'middle')));
   const badge = (cls, label, bw) => s('g', { class: `an-badge ${cls}`, transform: `translate(${w - bw - 10},-9)` }, s('rect', { width: bw, height: 17, rx: 5 }), s('text', { x: bw / 2, y: 12, 'text-anchor': 'middle' }, label));
   g.append(badge('b-add', 'NEW', 36), badge('b-rem', 'GONE', 40));
   if (n.type !== 'person') {
@@ -417,11 +423,6 @@ function buildArch(svg) {
     const d = roundedPath(e.pts);
     const path = s('path', { class: 'wl', d });
     const g = s('g', { class: `aw k-${e.kind}${e.async ? ' async' : ''}`, dataset: { wire: e.id } }, path, s('path', { class: 'whit', d }));
-    if (!reduceMotion && (e.kind === 'app' || e.status === 'added')) {
-      const dot = s('circle', { class: 'wdot', r: 2.6 });
-      const am = s('animateMotion', { dur: `${Math.max(2, e.pts.reduce((n0, p, i) => (i ? n0 + Math.abs(p[0] - e.pts[i - 1][0]) + Math.abs(p[1] - e.pts[i - 1][1]) : 0), 0) / 90).toFixed(2)}s`, repeatCount: 'indefinite', path: d });
-      dot.appendChild(am); g.appendChild(dot);
-    }
     let lbl = null;
     if (e.lbl) {
       lbl = s('g', { class: `aw-lbl k-${e.kind}` }, s('rect', { x: e.lbl.x, y: e.lbl.y, width: e.lbl.w, height: e.lbl.h, rx: 10 }), s('text', { x: e.lbl.x + e.lbl.w / 2, y: e.lbl.y + e.lbl.h / 2 + 0.5, 'text-anchor': 'middle', 'dominant-baseline': 'central' }, e.label));
@@ -565,7 +566,7 @@ function renderSystem() {
   const stat = (n, label, o, ic) => h('div', { class: 'sys-stat' }, icon(ic), h('b', { class: 'num', text: n }), h('span', { text: label }), delta(o));
   pg.append(h('div', { class: 'page-head' },
     h('div', null, h('h1', { text: 'Architecture' }), h('p', { text: 'A container diagram drawn from your code: who uses the system, the apps in this repo, the data they keep and the outside systems they call.' })),
-    h('div', { class: 'right' }, kindTabs, vt)));
+    h('div', { class: 'right' }, kindTabs, h('span', { class: 'diagram-only' }, detailTabs()), vt)));
   if (sum) {
     pg.append(h('div', { class: 'sys-stats stagger' },
       stat(sum.apps.total, sum.apps.total === 1 ? 'app' : 'apps', sum.apps, 'layers'),

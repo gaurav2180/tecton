@@ -165,10 +165,15 @@ export function layout(nodes, edges) {
     const w = width.get(id);
     pos[id] = { x: x.get(id) - w / 2 - minX, y: y(layer.get(id)), w, h: NODE_H };
   }
-  const pairs = new Set(edges.map((e) => `${e.from}→${e.to}`));
   const routes = {};
+  const ends = new Map(); // "node|bottom" / "node|top" -> the arrow ends attached there
+  const attach = (node, side, pt, toward, id) => {
+    const k = `${node}|${side}`;
+    if (!ends.has(k)) ends.set(k, []);
+    ends.get(k).push({ node, pt, toward, id });
+  };
   for (const e of edges) {
-    let chain = chains.get(e.id);
+    const chain = chains.get(e.id);
     const pts = chain.map((v, i) => {
       const cx = x.get(v) - minX;
       const cy = y(allLayer.get(v));
@@ -176,15 +181,22 @@ export function layout(nodes, edges) {
       if (i === chain.length - 1) return [cx, cy];
       return [cx, cy + NODE_H / 2];
     });
+    attach(chain[0], 'bottom', pts[0], pts[1], e.id);
+    attach(chain[chain.length - 1], 'top', pts[pts.length - 1], pts[pts.length - 2], e.id);
     if (flipped.has(e.id)) pts.reverse();
-    // two-way dependency between the same pair: offset so both arrows are visible
-    if (pairs.has(`${e.to}→${e.from}`)) {
-      const off = e.from < e.to ? -7 : 7;
-      pts.forEach((p) => { p[0] += off; });
-    }
-    routes[e.id] = pts.map(([a, b]) => [Math.round(a * 10) / 10, Math.round(b * 10) / 10]);
-    chain = null;
+    routes[e.id] = pts;
   }
+  // Arrows sharing a side of a box leave (or arrive) at separate points, ordered by where they head,
+  // instead of all fanning out of the middle. This also keeps both arrows of a two-way pair visible.
+  for (const list of ends.values()) {
+    if (list.length < 2) continue;
+    const { node } = list[0];
+    const span = Math.min(width.get(node) * 0.7, (list.length - 1) * 16);
+    const cx = x.get(node) - minX;
+    list.sort((a, b) => a.toward[0] - b.toward[0] || (a.id < b.id ? -1 : 1));
+    list.forEach((p, i) => { p.pt[0] = cx - span / 2 + (span * i) / (list.length - 1); });
+  }
+  for (const id of Object.keys(routes)) routes[id] = routes[id].map(([a, b]) => [Math.round(a * 10) / 10, Math.round(b * 10) / 10]);
   const W = Math.max(0, ...Object.values(pos).map((p) => p.x + p.w));
   const H = Math.max(0, ...Object.values(pos).map((p) => p.y + p.h));
   return { pos, routes, width: W, height: H, crossings: bestC };

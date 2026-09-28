@@ -2,7 +2,7 @@
 import { $, $$, s } from './lib/dom.js';
 import { D, PAGES, state } from './lib/data.js';
 import { applyTheme, closeSidebar, currentTheme, renderSidebar, renderTopbar } from './ui/shell.js';
-import { placeTabs } from './ui/common.js';
+import { placeTabs, setDetail } from './ui/common.js';
 import { renderOverview } from './pages/overview.js';
 import { renderRules } from './pages/rules.js';
 import { renderChanges } from './pages/changes.js';
@@ -33,6 +33,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ------------------------------------------------------------------ boot
+setDetail(state.detail, true);
 renderSidebar();
 renderTopbar();
 renderOverview();

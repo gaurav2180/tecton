@@ -352,20 +352,18 @@ td.r, th.r { text-align: right; }
 .edge:hover path.line { stroke-width: 2.4; }
 .edge.added path.line { stroke: var(--add); stroke-width: 2; }
 .edge.removed path.line { stroke: var(--rem); stroke-width: 1.7; stroke-dasharray: 6 5; }
-.edge.viol path.line { stroke: var(--viol); stroke-width: 2.6; stroke-dasharray: none; }
-.edge.viol path.glow { stroke: var(--viol); stroke-width: 7; opacity: .13; fill: none; animation: glow 2.2s ease-in-out infinite; }
-.edge:not(.viol) path.glow { display: none; }
-@keyframes glow { 50% { opacity: .04; } }
+.edge.viol path.line { stroke: var(--viol); stroke-width: 2; stroke-dasharray: none; }
+.edge.warnv path.line { stroke: color-mix(in srgb, var(--warn) 80%, var(--line)); stroke-width: 1.5; }
+.edge.nolbl .lbl { display: none; }
 .edge.sel path.line { stroke: var(--accent); stroke-width: 2.8; }
-.edge .flow { fill: var(--add); opacity: 0; }
-.edge.added .flow { opacity: 1; }
-.edge.viol .flow { fill: var(--viol); opacity: 1; }
 .lbl rect { fill: var(--surface); stroke: var(--border-strong); }
 .lbl text { fill: var(--text-2); font: 600 10px var(--mono); }
 .edge.added .lbl text { fill: var(--add-text); } .edge.added .lbl rect { stroke: color-mix(in srgb, var(--add) 50%, var(--border)); }
 .edge.removed .lbl text { fill: var(--rem-text); }
 .edge.viol .lbl rect { fill: var(--viol-soft); stroke: var(--viol); }
 .edge.viol .lbl text { fill: var(--viol-text); }
+.edge.warnv .lbl rect { fill: var(--warn-soft); stroke: color-mix(in srgb, var(--warn) 45%, var(--border)); }
+.edge.warnv .lbl text { fill: var(--warn-text); }
 /* files a change edits ("touched"): an indigo dot, the same accent as the moved plate */
 .node .tdot { fill: var(--accent); opacity: 0; transition: opacity .2s; }
 .node.touched .tdot { opacity: 1; }
@@ -518,6 +516,18 @@ i.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex
 #arch-card .aw.hl .wl { stroke: var(--accent); stroke-width: 2.4; }
 #arch-card .aw-lbl.hl rect { stroke: var(--accent); }
 @media (max-width: 860px) { .arch-card { height: 68vh; } .arch-hint { display: none; } }
+
+/* ---- level of detail: html.detail-simple shows names and arrows only (same shapes, nothing moves) */
+.an-simple { display: none; }
+.an-simple .an-name { font-size: 14px; }
+.detail-simple .an-full { display: none; }
+.detail-simple .an-simple { display: inline; }
+.detail-simple #arch-svg .aw-lbl { display: none; }
+.detail-simple #map-svg .lbl, .detail-simple .preview .lbl { display: none; }
+.detail-simple #map-svg .node.external, .detail-simple #map-svg .edge.ext, .detail-simple .preview .node.external { display: none; }
+.detail-simple #map-svg .n-meta, .detail-simple .preview .n-meta { display: none; }
+.detail-simple #map-svg .n-name, .detail-simple .preview .n-name { transform: translateY(7px); }
+#page-system:has(.arch-card.alt-on) .diagram-only { display: none; }
 
 /* ---- other kinds of diagram: shared */
 .alt-note { font-size: 12.5px; color: var(--text-2); margin: 0 2px 12px; max-width: 780px; line-height: 1.5; }
@@ -697,7 +707,6 @@ button.amx-rh:hover, button.amx-rh:focus-visible { color: var(--accent-text); }
 @media (max-width: 520px) { .stats { grid-template-columns: 1fr 1fr; } .stat .v { font-size: 22px; } .bar-row { grid-template-columns: 80px 1fr auto; } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-delay: 0s !important; transition-duration: .001ms !important; }
-  .edge .flow { display: none; }
 }
 </style>
 </head>
