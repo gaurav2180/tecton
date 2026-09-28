@@ -1,5 +1,5 @@
 // The report model embedded in the page, everything derived from it, and the shared UI state.
-import { plural, short } from './dom.js';
+import { plural, short, store } from './dom.js';
 
 /** @typedef {import('../../../types').ReportModel} ReportModel */
 
@@ -84,6 +84,10 @@ const PAGES = [
   { id: 'changes', title: 'Changes', icon: 'compare' },
   { id: 'modules', title: 'Modules', icon: 'box' },
 ];
-const state = { page: 'overview', view: hasBase ? 'diff' : 'cur', selected: null, focusOnly: false, touchedOnly: false };
+/** Shared UI state. mapView/archView: which kind of diagram each page shows (remembered per browser). */
+const state = {
+  page: 'overview', view: hasBase ? 'diff' : 'cur', selected: null, focusOnly: false, touchedOnly: false,
+  mapView: store.get('mapView') || 'graph', archView: store.get('archView') || 'diagram',
+};
 
 export { D, S, V, hasBase, nodesById, edgesById, violById, violEdges, pushTo, failing, curViols, isChange, changeKind, internalNodes, nodeStats, rules, changes, FG, FST, FILES, fileByPath, filesOf, touchedMods, canScope, fileKind, kindOrder, PAGES, state };

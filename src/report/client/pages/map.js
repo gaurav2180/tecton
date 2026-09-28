@@ -1,10 +1,11 @@
 // Dependency map page: layout rendering, drawer, pan/zoom, minimap and intro animation.
-import { $, $$, ICONS, esc, h, icon, plural, reduceMotion, s, short } from '../lib/dom.js';
+import { $, $$, ICONS, esc, h, icon, plural, reduceMotion, s, short, store } from '../lib/dom.js';
 import { D, canScope, edgesById, fileByPath, hasBase, isChange, nodeStats, nodesById, state, touchedMods, violById, violEdges } from '../lib/data.js';
 import { evidence, hideTip, kindBadge, showTip, statusBadge, tabs, violBadge } from '../ui/common.js';
 import { exportSvg } from '../ui/export.js';
 import { goModule } from './module.js';
 import { go } from '../ui/router.js';
+import { MAP_VIEWS, renderMapAlt } from './map-views.js';
 
 // ------------------------------------------------------------------ map
 const map = { built: false, animated: false, vb: { x: 0, y: 0, w: 100, h: 100 }, edgeEls: new Map(), nodeEls: new Map() };
@@ -47,9 +48,12 @@ function renderMap() {
     { value: 'cur', label: 'After' },
   ], state.view, (v) => { state.view = v; applyMap(); });
   viewTabs.id = 'view-tabs';
-  const focusSw = h('label', { class: 'switch glass', style: { display: hasBase ? '' : 'none' }, title: 'Show only dependencies that were added, removed or break a rule' },
+  const kindTabs = tabs(MAP_VIEWS, state.mapView, (v) => setMapView(v));
+  kindTabs.id = 'map-kind-tabs';
+  kindTabs.setAttribute('aria-label', 'Kind of diagram');
+  const focusSw = h('label', { class: 'switch glass graph-only', style: { display: hasBase ? '' : 'none' }, title: 'Show only dependencies that were added, removed or break a rule' },
     h('input', { type: 'checkbox', id: 'focus-sw', on: { change: (e) => { state.focusOnly = e.target.checked; if (state.focusOnly) { state.touchedOnly = false; const t = $('#touched-sw'); if (t) t.checked = false; if (state.view !== 'diff') { state.view = 'diff'; viewTabs._set('diff'); } } applyMap(); } } }), 'Only changes');
-  const touchedSw = canScope ? h('label', { class: 'switch glass', title: 'Show only the modules whose files this change edits, and what they connect to' },
+  const touchedSw = canScope ? h('label', { class: 'switch glass graph-only', title: 'Show only the modules whose files this change edits, and what they connect to' },
     h('input', { type: 'checkbox', id: 'touched-sw', on: { change: (e) => { state.touchedOnly = e.target.checked; if (state.touchedOnly) { state.focusOnly = false; $('#focus-sw').checked = false; } applyMap(); } } }),
     h('i', { class: 'tdot-key', 'aria-hidden': 'true' }), 'Only touched') : null;
   const legendItem = (cls, label) => h('span', null, s('svg', { viewBox: '0 0 22 8' }, s('g', { class: `edge ${cls}` }, s('path', { class: 'line', d: 'M1,4 L21,4' }))), label);
@@ -66,14 +70,35 @@ function renderMap() {
   const svg = s('svg', { id: 'map-svg', role: 'img', 'aria-label': 'Module dependency map' });
   const stage = h('div', { id: 'stage' }, svg);
   const drawer = h('aside', { class: 'drawer', id: 'drawer', 'aria-label': 'Details' });
-  pg.append(h('div', { class: 'card map-card' }, stage,
-    h('div', { class: 'float tl' }, h('div', { class: 'glass', style: { padding: '0', borderRadius: '11px' } }, viewTabs), focusSw, touchedSw, legend),
+  const alt = h('div', { class: 'map-alt', id: 'map-alt' });
+  pg.append(h('div', { class: 'card map-card', id: 'map-card' }, stage, alt,
+    h('div', { class: 'float tl', id: 'map-float' }, h('div', { class: 'glass', style: { padding: '0', borderRadius: '11px' } }, kindTabs), h('div', { class: 'glass', style: { padding: '0', borderRadius: '11px' } }, viewTabs), focusSw, touchedSw, legend),
     h('div', { class: 'float br' }, zoomCtl),
     h('div', { class: 'float bl' }, minimap),
     drawer));
   buildGraph(svg);
   buildMinimap(minimap);
   wirePanZoom(stage);
+  setMapView(state.mapView, true);
+}
+
+/** Graph, Matrix or Radial. The graph stays built underneath, so switching back keeps its zoom. */
+function setMapView(v, quiet) {
+  if (!MAP_VIEWS.some((x) => x.value === v)) v = 'graph';
+  state.mapView = v;
+  if (!quiet) store.set('mapView', v);
+  const card = $('#map-card');
+  card.dataset.kind = v;
+  card.classList.toggle('alt-on', v !== 'graph');
+  hideTip();
+  placeAlt();
+  renderMapAlt($('#map-alt'));
+  if (v === 'graph' && !quiet) requestAnimationFrame(() => { if (!map.fitted) { fit(false); map.fitted = true; } });
+}
+/** Keep the other views clear of the floating toolbar, whose height changes as it wraps. */
+function placeAlt() {
+  const fl = $('#map-float'); const alt = $('#map-alt');
+  if (fl && alt) alt.style.top = `${fl.offsetTop + fl.offsetHeight + 12}px`;
 }
 
 function buildGraph(svg) {
@@ -225,6 +250,7 @@ function applyMap() {
   });
   updateMinimapClasses(violNodes);
   renderDrawer();
+  if (state.mapView !== 'graph') renderMapAlt($('#map-alt'));
 }
 
 function nodeTip(n) {
@@ -469,4 +495,4 @@ function introAnimation() {
   }, 1900);
 }
 
-export { map, pathD, samplePath, renderMap, buildGraph, present, activeViol, applyMap, nodeTip, edgeTip, renderDrawer, select, goSelect, setVB, stageRect, fitTo, vbAnim, animateVB, fit, revealSelection, zoom, wirePanZoom, buildMinimap, updateMinimapViewport, updateMinimapClasses, introAnimation };
+export { setMapView, placeAlt, map, pathD, samplePath, renderMap, buildGraph, present, activeViol, applyMap, nodeTip, edgeTip, renderDrawer, select, goSelect, setVB, stageRect, fitTo, vbAnim, animateVB, fit, revealSelection, zoom, wirePanZoom, buildMinimap, updateMinimapViewport, updateMinimapClasses, introAnimation };

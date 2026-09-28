@@ -40,6 +40,14 @@ test.describe('every page renders and matches its screenshot', () => {
       await expect(page).toHaveScreenshot(`demo-${hash.replace(':', '-')}.png`, { mask: unversioned(page) });
     });
   }
+  for (const [hash, tabs, view] of [['map', '#map-kind-tabs', 'Matrix'], ['map', '#map-kind-tabs', 'Radial'], ['system', '#arch-kind-tabs', 'Tiers'], ['system', '#arch-kind-tabs', 'Matrix']]) {
+    test(`demo · ${hash} as ${view}`, async ({ page }) => {
+      await open(page, 'demo', hash);
+      await page.locator(`${tabs} button`, { hasText: view }).click();
+      await expect(page.locator(hash === 'map' ? '#map-alt' : '#arch-alt')).toBeVisible();
+      await expect(page).toHaveScreenshot(`demo-${hash}-${view.toLowerCase()}.png`, { mask: unversioned(page) });
+    });
+  }
   test('big repo · architecture diagram', async ({ page }) => {
     await open(page, 'big', 'system');
     await expect(page.locator('#arch-svg .an')).toHaveCount(4 + 6 + 11 + 1); // apps, stores, outside systems, users
@@ -54,6 +62,7 @@ test.describe('interactions', () => {
     await page.keyboard.press('2');
     await expect(page).toHaveURL(/#system$/);
     await page.keyboard.press('Control+k');
+    await expect(page.locator('.palette input')).toBeFocused(); // it focuses a moment after opening
     await page.keyboard.type('stripe.ts');
     await expect(page.locator('.pal-item.on')).toContainText('src/payments/stripe.ts');
     await page.keyboard.press('Enter');
@@ -97,6 +106,35 @@ test.describe('interactions', () => {
     await expect(page.locator('#sheet')).not.toHaveClass(/open/);
     await page.locator('#fmap .node.external', { hasText: 'payments' }).click();
     await expect(page).toHaveURL(/#module:payments$/);
+  });
+
+  test('diagram kinds: remembered after a reload, and their cells open the details', async ({ page }) => {
+    await open(page, 'demo', 'map');
+    await page.locator('#map-kind-tabs button', { hasText: 'Matrix' }).click();
+    // components → db is a new rule break: its cell is marked and opens the dependency in the side panel
+    const cell = page.locator('.dsm td[aria-label="components imports db"]');
+    await expect(cell).toHaveClass(/\bviol\b/);
+    await cell.click();
+    await expect(page.locator('#drawer')).toHaveClass(/open/);
+    await expect(page.locator('#drawer h3')).toContainText('components');
+    await page.reload();
+    await expect(page.locator('#map-card')).toHaveAttribute('data-kind', 'matrix');
+    await page.locator('#map-kind-tabs button', { hasText: 'Graph' }).click();
+    await expect(page.locator('#map-card')).not.toHaveClass(/alt-on/);
+
+    await page.goto(page.url().replace(/#.*$/, '#system'));
+    await page.locator('#arch-kind-tabs button', { hasText: 'Matrix' }).click();
+    await page.locator('.amx td[title^="server → Redis"]').click();
+    await expect(page.locator('#sheet')).toHaveClass(/open/);
+    await expect(page.locator('#sheet h3')).toHaveText('Redis');
+  });
+
+  test('architecture tiers: Before hides what the branch added', async ({ page }) => {
+    await open(page, 'demo', 'system');
+    await page.locator('#arch-kind-tabs button', { hasText: 'Tiers' }).click();
+    await expect(page.locator('.tile[data-id="svc:stripe"]')).toHaveClass(/s-added/);
+    await page.locator('.sys-tabs button', { hasText: 'Before' }).click();
+    await expect(page.locator('.tile[data-id="svc:stripe"]')).toHaveCount(0);
   });
 
   test('rule checks list both new breaks', async ({ page }) => {

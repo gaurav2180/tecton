@@ -39,7 +39,8 @@ In CI, or when output is piped, it writes `./tecton-report.html` and opens nothi
 One self-contained HTML file (fonts included, works offline) laid out like a small SaaS app:
 
 - **Overview**: pass/fail status, counters, a breakdown of dependency changes, rule checks, a live map preview and files per module.
-- **Architecture**: a C4 container diagram read from your code. Users sit on top, your repo is a dashed system boundary holding its apps, databases (cylinders) and queues (pipes), and outside systems sit on the right. Every connector is labelled (`HTTP · API_URL`, `reads & writes · SQL`, `adds jobs`), queue traffic is dotted, and connectors from one app travel as a bundle. Pan, zoom, hover an app to trace its connections, and export as SVG. What it finds:
+- **Architecture**: a C4 container diagram read from your code. Users sit on top, your repo is a dashed system boundary holding its apps, databases (cylinders) and queues (pipes), and outside systems sit on the right. Every connector is labelled (`HTTP · API_URL`, `reads & writes · SQL`, `adds jobs`), queue traffic is dotted, and connectors from one app travel as a bundle. Pan, zoom, hover an app to trace its connections, and export as SVG.
+  Prefer another picture? Switch to **Tiers** (bands from people down to outside systems) or **Matrix** (a grid of which app talks to what, and how). What it finds:
   - **Apps**: every `package.json` (Next.js, Nuxt, SvelteKit, Express, Fastify, NestJS, Hono, Koa, …).
   - **Entry points**:
     - pages and API routes: Next.js app/pages router, Nuxt `pages/` and `server/api/`, SvelteKit `+page.svelte` / `+server.ts`
@@ -49,7 +50,8 @@ One self-contained HTML file (fonts included, works offline) laid out like a sma
   - **Data and queues**: SQLite, Postgres, MySQL, Mongo, Redis, Prisma, Drizzle, S3, …, plus **queues** (BullMQ, Bull and Bee-Queue by queue name; SQS, RabbitMQ, Kafka, Pub/Sub, Service Bus, QStash, Inngest, …). Connection strings in `.env.example` name the real engine (`DATABASE_URL=postgres://…` next to Prisma shows "PostgreSQL via Prisma").
   - **Outside services**: hosts in URLs, SDKs such as Stripe, OpenAI and nodemailer, URLs in `.env.example`, and services that are only named by an env var (`FRAUD_CHECK_URL=` becomes "Fraud Check").
   - App-to-app calls are found through env vars like `BACKEND_URL`. New or removed pieces are highlighted, and clicking anything shows every entry point and the exact lines behind it.
-- **Dependency map**: switch between **Changes / Before / After**. Boxes never move between views, so you can flip back and forth.
+- **Dependency map**: pick **Graph** (layered boxes and arrows), **Matrix** (a dependency structure matrix: rows import columns, loops show as mirrored cells) or **Radial** (modules around a circle, imports as curves; tightly knit groups stand out). Your choice is remembered.
+  Switch between **Changes / Before / After**. Boxes never move between views, so you can flip back and forth.
   Green = new dependency, red dashed = removed, orange = breaks a rule. Numbers on arrows are how many imports.
   - **Only changes** shows just the dependencies that moved.
   - **Only touched** shows the modules whose files this change edits (marked with an indigo dot) and what they connect to: the PR at a glance.

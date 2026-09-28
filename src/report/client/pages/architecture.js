@@ -1,5 +1,5 @@
 // Architecture page: the C4 container diagram, its side sheet and the overview glance.
-import { $, $$, ICONS, esc, h, icon, plural, reduceMotion, s } from '../lib/dom.js';
+import { $, $$, ICONS, esc, h, icon, plural, reduceMotion, s, store } from '../lib/dom.js';
 import { D, hasBase, state } from '../lib/data.js';
 import { toast } from '../ui/shell.js';
 import { hideTip, kindBadge, placeTabs, showTip, tabs } from '../ui/common.js';
@@ -7,6 +7,7 @@ import { applyMap, goSelect, present } from './map.js';
 import { exportSvgFrom } from '../ui/export.js';
 import { modState, renderModule, selectFile } from './module.js';
 import { go } from '../ui/router.js';
+import { ARCH_VIEWS, renderArchAlt } from './arch-views.js';
 
 // ------------------------------------------------------------------ system architecture
 /** @typedef {import('../../../types').App} App @typedef {import('../../../types').Store} Store @typedef {import('../../../types').OutsideDiff} Outside */
@@ -347,7 +348,6 @@ function archNode(n) {
     g.style.setProperty('--app', n.color);
     g.append(
       s('rect', { class: 'an-shape', width: w, height: h, rx: 12 }),
-      s('rect', { class: 'an-band', width: w, height: 5, rx: 2.5 }),
       s('rect', { class: 'an-ibox', x: 16, y: 18, width: 30, height: 30, rx: 8 }),
       ic(appIcon(n.ref), 22, 24),
       txt('an-name', 56, 32, n.name), txt('an-kind', 56, 47, `[${n.kind}]`),
@@ -558,11 +558,14 @@ function renderSystem() {
     { value: 'cur', label: 'After' },
   ], state.view, (v) => { state.view = v; syncViews(); });
   vt.classList.add('sys-tabs');
+  const kindTabs = tabs(ARCH_VIEWS, state.archView, (v) => setArchView(v));
+  kindTabs.id = 'arch-kind-tabs';
+  kindTabs.setAttribute('aria-label', 'Kind of diagram');
   const delta = (o) => (hasBase && (o.added || o.removed) ? [o.added ? h('span', { class: 'chip add', text: `+${o.added}` }) : null, o.removed ? h('span', { class: 'chip rem', text: `−${o.removed}` }) : null] : null);
   const stat = (n, label, o, ic) => h('div', { class: 'sys-stat' }, icon(ic), h('b', { class: 'num', text: n }), h('span', { text: label }), delta(o));
   pg.append(h('div', { class: 'page-head' },
     h('div', null, h('h1', { text: 'Architecture' }), h('p', { text: 'A container diagram drawn from your code: who uses the system, the apps in this repo, the data they keep and the outside systems they call.' })),
-    h('div', { class: 'right' }, vt)));
+    h('div', { class: 'right' }, kindTabs, vt)));
   if (sum) {
     pg.append(h('div', { class: 'sys-stats stagger' },
       stat(sum.apps.total, sum.apps.total === 1 ? 'app' : 'apps', sum.apps, 'layers'),
@@ -578,7 +581,7 @@ function renderSystem() {
   const stage = h('div', { id: 'arch-stage' }, svg);
   const key = (cls, label, shape) => h('span', { class: 'ak' }, s('svg', { viewBox: '0 0 26 16', 'aria-hidden': 'true' }, shape || s('g', { class: `aw ${cls}` }, s('path', { class: 'wl', d: 'M2,8 L24,8' }))), label);
   const shapeKey = (cls, d) => s('path', { class: `ak-shape ${cls}`, d });
-  const legend = h('div', { class: 'arch-legend' },
+  const legend = h('div', { class: 'arch-legend', id: 'arch-legend' },
     key('', 'Person', shapeKey('', 'M13,1.5 a3,3 0 1 1 0,6 a3,3 0 1 1 0,-6 M5,15 q0,-6 8,-6 q8,0 8,6 z')),
     key('', 'App (container)', shapeKey('', 'M3,3 h20 a2,2 0 0 1 2,2 v8 a2,2 0 0 1 -2,2 h-20 a2,2 0 0 1 -2,-2 v-8 a2,2 0 0 1 2,-2 z')),
     key('', 'Database', shapeKey('', 'M6,3 a7,2.5 0 0 1 14,0 v10 a7,2.5 0 0 1 -14,0 z M6,3 a7,2.5 0 0 0 14,0')),
@@ -596,6 +599,7 @@ function renderSystem() {
     h('div', { class: 'pct', id: 'arch-pct', text: '100%' }));
   pg.append(h('div', { class: 'card arch-card', id: 'arch-card' },
     stage,
+    h('div', { class: 'arch-alt', id: 'arch-alt' }),
     h('div', { class: 'float br' }, zoomCtl),
     h('div', { class: 'float bl' }, h('div', { class: 'arch-hint glass' }, icon('sparkle'), 'Hover to trace · click for the exact lines · drag to pan'))),
   legend);
@@ -603,10 +607,26 @@ function renderSystem() {
   buildArch(svg);
   applyArch();
   archPanZoom(stage);
+  setArchView(state.archView, true);
   requestAnimationFrame(() => {
     placeTabs();
-    if (keepVB) { arch.vb = keepVB; archSetVB(); } else arch.fitted = archFit(false);
+    if (keepVB) { arch.vb = keepVB; archSetVB(); } else if (state.archView === 'diagram') arch.fitted = archFit(false);
   });
+}
+
+/** Diagram, Tiers or Matrix. The diagram stays built underneath, so switching back keeps its zoom. */
+function setArchView(v, quiet) {
+  if (!ARCH_VIEWS.some((x) => x.value === v)) v = 'diagram';
+  state.archView = v;
+  if (!quiet) store.set('archView', v);
+  const card = $('#arch-card');
+  if (!card) return;
+  card.dataset.kind = v;
+  card.classList.toggle('alt-on', v !== 'diagram');
+  archHl(null);
+  hideTip();
+  renderArchAlt($('#arch-alt'));
+  if (v === 'diagram' && !arch.fitted) requestAnimationFrame(() => { arch.fitted = archFit(false); });
 }
 function statusTag(x) {
   if (state.view !== 'diff' || !x.status || x.status === 'same') return null;
@@ -690,7 +710,7 @@ function syncViews() {
   const vt = $('#view-tabs'); if (vt) vt._set(state.view);
   applyMap();
   $$('.sys-tabs').forEach((t) => t._set && t._set(state.view));
-  if (arch.svg) applyArch(); else renderSystem();
+  if (arch.svg) { applyArch(); if (state.archView !== 'diagram') renderArchAlt($('#arch-alt')); } else renderSystem();
   if (state.page === 'module') renderModule(modState.id);
 }
 
@@ -717,4 +737,4 @@ function systemGlance() {
     h('div', { class: 'card-b' }, flow, tail));
 }
 
-export { SYS, sysState, GROUPS, storeIcon, appIcon, visible, stClass, appById, appLabel, svcById, orderApps, cssId, APP_COLORS, appColor, arch, G, snap, textW, clip, statusOf, entrySummary, wireLabel, archModel, archLayout, routeWires, roundedPath, archNode, buildArch, applyArch, archHl, archSetVB, archFit, archZoom, archPanZoom, exportArchSvg, renderSystem, statusTag, openSys, closeSheet, syncViews, systemGlance };
+export { setArchView, SYS, sysState, GROUPS, storeIcon, appIcon, visible, stClass, appById, appLabel, svcById, orderApps, cssId, APP_COLORS, appColor, arch, G, snap, textW, clip, statusOf, entrySummary, wireLabel, archModel, archLayout, routeWires, roundedPath, archNode, buildArch, applyArch, archHl, archSetVB, archFit, archZoom, archPanZoom, exportArchSvg, renderSystem, statusTag, openSys, closeSheet, syncViews, systemGlance };

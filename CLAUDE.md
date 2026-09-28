@@ -96,6 +96,13 @@ The logo system lives in `brand/`. Its source of truth is the "Tecton logo" desi
   - Routing: A* on an 8px grid around boxes with 12px clearance. Wires leaving one side share a port and travel as a bundle: cells a source already owns are cheaper. Labels go on each wire's last free stretch.
   - Keep costs in Float64Array: float32 rounding broke the stale-entry check and produced huge detours.
   - It has its own pan/zoom (`archPanZoom`, `archFit`, min 50% on phones) and SVG export through the shared `exportSvgFrom`.
+- **Diagram kinds.** Both diagram pages let the viewer pick how to see them: `state.mapView` / `state.archView`, remembered in localStorage.
+  - Dependency map: Graph (`map.js`), Matrix (a dependency structure matrix) and Radial, the last two in `map-views.js`.
+  - Architecture: Diagram (`architecture.js`), Tiers and Matrix, the last two in `arch-views.js`.
+  - The default view stays built underneath the others (hidden, not destroyed) so its zoom survives a switch.
+  - The other views are re-rendered from scratch by `renderMapAlt` / `renderArchAlt` on every view, selection or Changes/Before/After change.
+  - Add a new kind by adding it to `MAP_VIEWS` / `ARCH_VIEWS` and a branch in the render function. It must follow `present()`/statuses and open the same drawer/sheet.
+- **No decorative accent stripes** (coloured top/left bars on cards, rows or nav items). The user found them "AI slop". Show state with background tint, icon colour or a badge instead.
 - A module page (`#module:<name>`, `renderModule`, not in `PAGES`/the nav) shows that module's files as a diagram (`fileGraph` → `drawFileMap` → `applyFileMap`), a files table, and a per-file `#sheet` (`openFileSheet`). Open it with `goModule(id, file?)`.
 - `state.touchedOnly` / `touchedMods` drive the map's "Only touched" filter. Edited files use the indigo accent (`.tdot`, `chip acc`, `badge acc`), because blue `--chg` already means "import count changed".
 - It also includes the ⌘K palette, toasts, the drawer / `#sheet` side panels and SVG export.

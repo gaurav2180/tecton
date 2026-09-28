@@ -3,7 +3,8 @@ import { $, $$ } from '../lib/dom.js';
 import { D, PAGES, nodesById, state } from '../lib/data.js';
 import { countUp, hideTip, placeTabs } from './common.js';
 import { applyArch, arch, archFit, closeSheet, renderSystem } from '../pages/architecture.js';
-import { fit, introAnimation, map } from '../pages/map.js';
+import { renderArchAlt } from '../pages/arch-views.js';
+import { fit, introAnimation, map, placeAlt } from '../pages/map.js';
 import { renderModule } from '../pages/module.js';
 
 // ------------------------------------------------------------------ routing
@@ -33,11 +34,12 @@ function show(page) {
   if (page !== 'system') closeSheet();
   if (page === 'system') {
     if (!arch.svg) renderSystem();
-    else { $$('.sys-tabs').forEach((t) => t._set && t._set(state.view)); applyArch(); }
-    requestAnimationFrame(() => { if (!arch.fitted) arch.fitted = archFit(false); });
+    else { $$('.sys-tabs').forEach((t) => t._set && t._set(state.view)); applyArch(); if (state.archView !== 'diagram') renderArchAlt($('#arch-alt')); }
+    requestAnimationFrame(() => { if (!arch.fitted && state.archView === 'diagram') arch.fitted = archFit(false); });
   }
   if (page === 'module') renderModule(modId);
   if (page === 'map') {
+    placeAlt();
     requestAnimationFrame(() => {
       if (!map.fitted) { fit(false); map.fitted = true; }
       introAnimation();
