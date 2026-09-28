@@ -133,7 +133,7 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
-      - uses: gaurav2180/tecton@v0.4.1
+      - uses: gaurav2180/tecton@v0.5.0
 ```
 
 The action compares the pull request with its base branch and does four things:

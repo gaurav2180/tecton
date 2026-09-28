@@ -19,11 +19,11 @@ jobs:
         with:
           node-version: 20
 
-      - uses: gaurav2180/tecton@v0.4.1
+      - uses: gaurav2180/tecton@v0.5.0
         # with:
         #   working-directory: apps/web   # where tecton.config.json lives
         #   strict: 'true'                 # fail on existing rule breaks too
         #   comment: 'false'               # only the job summary + artifact
 
 # Without the action (any CI):
-#   npx tecton@0.4 --base "origin/$BASE_BRANCH" --head HEAD --out tecton-report.html --md tecton.md
+#   npx tecton@0.5 --base "origin/$BASE_BRANCH" --head HEAD --out tecton-report.html --md tecton.md
