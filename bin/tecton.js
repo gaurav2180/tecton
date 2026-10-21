@@ -12,6 +12,7 @@ import { diffGraphs } from '../src/diff.js';
 import { layout } from '../src/layout.js';
 import { detectSystem, diffSystems } from '../src/system.js';
 import { toHtml, toMarkdown } from '../src/report.js';
+import { toArchitectureDoc, aboutOf, docTitle } from '../src/docs.js';
 
 /** @typedef {import('../src/types.js').Graph} Graph @typedef {import('../src/types.js').Source} Source @typedef {import('../src/types.js').FileGraph} FileGraph */
 
@@ -23,6 +24,8 @@ Usage
   tecton [dir] [options]      map the code, compare it with main, check rules and open the report
   tecton serve [dir]          open the report in your browser and refresh it whenever a file changes
   tecton init [dir]           create tecton.config.json with your modules and an example rule
+  tecton docs [dir]           write ARCHITECTURE.md: system, request flows, modules and files as Mermaid
+                              diagrams, read from the code (--out <file> to write elsewhere, - for stdout)
 
 Options
   --base <ref>        what to compare against (default: main, then master)
@@ -82,7 +85,7 @@ function loadConfig(dir, file) {
 }
 
 function pickBase(dir, opts, cfg) {
-  if (!gitInfo(dir)) return null;
+  if (opts.noBase || !gitInfo(dir)) return null;
   const candidates = opts.base ? [opts.base] : cfg.base ? [cfg.base] : ['main', 'master', 'origin/main', 'origin/master'];
   const ref = candidates.find((r) => refExists(dir, r));
   if (!ref) { if (opts.base) fail(`git ref not found: ${opts.base}`); return null; }
@@ -214,7 +217,7 @@ function analyze(dir, opts) {
   model.markdown = toMarkdown(model);
   const failing = d.violations.filter((v) => v.severity === 'error' && v.status !== 'fixed'
     && (opts.strict || !base || v.status === 'new')).length;
-  return { model, d, base, ms: Date.now() - t0, failing };
+  return { model, d, base, ms: Date.now() - t0, failing, src: curSrc };
 }
 
 function printSummary({ d, base, ms }, opts) {
@@ -390,12 +393,46 @@ function serve(dir, opts) {
   server.listen(port, host);
 }
 
+// ------------------------------------------------------------------ tecton docs
+/** Write the architecture as Markdown: the code as it is now (no comparison), plus links to the docs already there. */
+function docs(dir, opts) {
+  const res = analyze(dir, { ...opts, noBase: true });
+  const toStdout = opts.out === '-';
+  const out = toStdout ? null : path.resolve(opts.out || path.join(dir, 'ARCHITECTURE.md'));
+  const src = res.src;
+  const rel = (f) => path.relative(path.dirname(out || path.join(dir, 'x')), path.join(dir, f)).split(path.sep).join('/');
+  const found = (src.docs || []).filter((f) => !out || path.resolve(dir, f) !== out)
+    .filter((f) => !/(^|\/)(CHANGELOG|LICENSE|CODE_OF_CONDUCT)(\.mdx?)?$/i.test(f))
+    .sort((a, b) => Number(a.includes('/')) - Number(b.includes('/')) || a.localeCompare(b));
+  let pkg = {};
+  try { pkg = parseJsonc(src.read('package.json') || '{}'); } catch { /* no root package.json */ }
+  const readme = found.find((f) => /^readme\.mdx?$/i.test(f));
+  const md = toArchitectureDoc(res.model, {
+    about: aboutOf(readme ? src.read(readme) : null, pkg.description),
+    docs: found.map((f) => ({ path: rel(f), title: docTitle(f, src.read(f)) })),
+  });
+  if (toStdout) { process.stdout.write(md); return 0; }
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  fs.writeFileSync(out, md);
+  const sys = res.model.system;
+  const flows = sys.apps.reduce((n, a) => n + Object.values(a.groups).flat().filter((e) => e.flow && e.flow.length).length, 0);
+  console.log(`${bold('tecton docs')} ${dim(`${res.model.summary.files.cur} files · ${res.ms}ms`)}`);
+  console.log(`  ${sys.apps.length} apps · ${flows} request flows · ${res.model.summary.modules.total} modules · ${sys.stores.length} data stores · ${sys.outside.length} outside services`);
+  console.log(`wrote ${out}`);
+  return 0;
+}
+
 function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (opts.help) { process.stdout.write(HELP); return 0; }
   if (opts.version) { console.log(VERSION); return 0; }
   const cmd = opts._[0];
   if (cmd === 'init') { init(path.resolve(opts._[1] || '.')); return 0; }
+  if (cmd === 'docs') {
+    const dir = path.resolve(opts._[1] || '.');
+    if (!fs.existsSync(dir)) fail(`folder not found: ${dir}`);
+    return docs(dir, opts);
+  }
   if (cmd === 'serve') {
     const dir = path.resolve(opts._[1] || '.');
     if (!fs.existsSync(dir)) fail(`folder not found: ${dir}`);

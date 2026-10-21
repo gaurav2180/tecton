@@ -5,6 +5,14 @@ import { nameMatches, globToRegex, makeGrouper, buildGraph } from '../src/graph.
 import { evaluate } from '../src/rules.js';
 import { layout } from '../src/layout.js';
 import { detectSystem, describeCron } from '../src/system.js';
+import { aboutOf, docTitle } from '../src/docs.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
 
 let passed = 0;
 const test = (name, fn) => { try { fn(); passed++; } catch (e) { console.error(`FAIL ${name}\n`, e); process.exitCode = 1; } };
@@ -318,6 +326,39 @@ test('queue workers are entry points, and a job put on a queue is a step', () =>
   const w = entryOf(sys, 'svc', 'workers', 'emails · svc/worker.js');
   assert.equal(w.queue, 'store:queue-emails');
   assert.deepEqual(w.flow.map((s) => s.to), ['svc:resend']);
+});
+
+// ---------------------------------------------------------------- tecton docs
+test('docs: project description and doc titles', () => {
+  assert.equal(aboutOf('# Shop\n\n[![ci](x.svg)](y)\n\nA small shop:\nweb and api.\n\n## Setup', null), 'A small shop: web and api.');
+  assert.equal(aboutOf('# Shop', 'From package.json'), 'From package.json');
+  assert.equal(aboutOf('# Only a title', null), null);
+  assert.equal(docTitle('docs/adr/001.md', '---\ntitle: Use Postgres\n---\nbody'), 'Use Postgres');
+  assert.equal(docTitle('docs/setup.md', 'intro\n\n# Setting **up**\n'), 'Setting up');
+  assert.equal(docTitle('notes.md', 'no heading'), 'notes.md');
+});
+
+test('docs: ARCHITECTURE.md from the code, with diagrams, flows and the docs already there, the same every run', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tecton-docs-'));
+  const files = {
+    'package.json': JSON.stringify({ name: 'shop', description: 'A tiny shop.', dependencies: { express: '4', pg: '8' } }),
+    'src/index.js': "import express from 'express';\nimport { list } from './db.js';\nconst app = express();\napp.get('/items', async (req, res) => res.json(await list()));",
+    'src/db.js': "import pg from 'pg';\nconst pool = new pg.Pool();\nexport const list = () => pool.query('select 1');",
+    'docs/decisions.md': '# Why Postgres\n\nBecause.',
+  };
+  for (const [f, text] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), text); }
+  const run = () => execFileSync(process.execPath, [path.join(here, '..', 'bin', 'tecton.js'), 'docs', dir, '--out', '-'], { encoding: 'utf8' });
+  const md = run();
+  assert.ok(md.startsWith('# '));
+  assert.ok(md.includes('A tiny shop.'));
+  assert.ok(md.includes('## System overview') && md.includes('## Request flows') && md.includes('## Modules'));
+  assert.match(md, /### `GET \/items` in /);
+  assert.match(md, /reads & writes \*\*PostgreSQL\*\*: `src\/db\.js:1` via `src\/index\.js`/);
+  assert.ok(md.includes('[Why Postgres](docs/decisions.md)'));
+  assert.ok((md.match(/```mermaid/g) || []).length >= 3);
+  assert.ok(!/#lt;br/.test(md), 'line breaks stay line breaks');
+  assert.equal(run(), md, 'deterministic');
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 console.log(`${passed} tests passed${process.exitCode ? ', some FAILED' : ''}`);

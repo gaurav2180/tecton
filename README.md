@@ -30,6 +30,7 @@ When you want more:
 ```bash
 npx tecton serve         # the same report, refreshed in your browser every time you save
 npx tecton init          # add tecton.config.json with your modules and a first rule, so CI can enforce it
+npx tecton docs          # write ARCHITECTURE.md: system, request flows, modules and files as Mermaid diagrams
 ```
 
 In CI, or when output is piped, it writes `./tecton-report.html` and opens nothing (or pass `--out`). Use `--no-open` or `BROWSER=none` to skip the browser anywhere.
@@ -67,6 +68,20 @@ One self-contained HTML file (fonts included, works offline) laid out like a sma
 - Light, dark and system themes. **Copy PR summary** puts the Markdown summary on your clipboard.
 
 The Geist fonts are embedded under the SIL Open Font License (`src/report/fonts/OFL-LICENSE.txt`).
+
+## Architecture docs
+
+`tecton docs [dir]` writes `ARCHITECTURE.md` into the project, read straight from the code. No AI is involved, and the same code always gives the same file, so it can live in the repo and be refreshed in CI. Its diagrams are Mermaid, which GitHub, GitLab, VS Code and most AI coding tools render. It covers:
+
+- **System overview** (high level): users, apps, data stores and outside services, in a sentence and a diagram, then which app calls which outside service.
+- **Apps**: framework, folder, notable tech, what uses each app and what it talks to, and every entry point with what it reaches.
+- **Request flows**: one flowchart per entry point (page, route, endpoint, script, schedule, queue worker), traced through its handler and the files it imports, with the `file:line` of every step.
+- **Data and outside services**: tables with where each one is used.
+- **Modules** (low level): the module dependency diagram, a table of who imports whom, and a file-level diagram inside each module.
+- **Rules**: each rule and its breaks.
+- **Further reading**: the Markdown docs already in the folder (README, `docs/…`), linked by title. The project description comes from `package.json` or the README.
+
+`--out <file>` writes it somewhere else, and `--out -` prints it. Point your AI tool at the file when you ask it about the project: it's a precise map to start from.
 
 ## Watch mode
 
@@ -112,6 +127,7 @@ tecton [dir] [--base <ref>] [--head <ref>] [--out report.html] [--md summary.md]
              [--config file] [--no-merge-base] [--strict] [--no-open]
 tecton serve [dir] [--port 4321] [--base <ref>] [--no-open]
 tecton init [dir]
+tecton docs [dir] [--out ARCHITECTURE.md | -] [--config file]
 tecton --version
 ```
 

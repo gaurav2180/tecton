@@ -17,6 +17,7 @@ It can also write a Markdown summary for PR comments (with Mermaid) and raw JSON
 - `bash examples/make-demo.sh /tmp/demo-shop && cd /tmp/demo-shop && node <repo>/bin/tecton.js --open`: end-to-end check on a demo repo that breaks two rules.
 - `node bin/tecton.js <dir> --base <ref> --head <ref> --out r.html --md r.md --json r.json`: see `--help`.
 - `node bin/tecton.js serve <dir> [--port 4321]`: watch mode (live-reloading report).
+- `node bin/tecton.js docs <dir> [--out file | -]`: write `ARCHITECTURE.md` (Mermaid diagrams, request flows, modules, rules, links to the folder's own docs).
 - `npm pack --dry-run`: check what ships to npm (`files` in package.json). `action.yml` is the GitHub Action (composite; runs `bin/tecton.js` from the action checkout).
 - Regenerate `examples/demo-report.html` after UI changes: run the demo with `--out <repo>/examples/demo-report.html`.
 
@@ -57,6 +58,10 @@ It can also write a Markdown summary for PR comments (with Mermaid) and raw JSON
 6. `src/layout.js` is a Sugiyama-style layered layout for the dependency map (break loops, assign layers, add dummy nodes, reduce crossings with barycenters, then coordinates).
 7. `src/report.js`: `toHtml(model)` inlines `template.html`, the client bundle (`dist/client.js`), the fonts and the JSON data. `toMarkdown(model)` writes the PR summary. Its Mermaid colours are the brand product signals (`COLORS`).
    - The bundle includes `layout.js`, so module file diagrams are laid out in the page by the same deterministic code.
+8. `src/docs.js`: `toArchitectureDoc(model, { about, docs })` for `tecton docs`, which runs `analyze` with `noBase` (the code as it is now). Sections: system overview (repo diagram with outside systems as one box, then apps → outside purpose groups), apps, request flows (one flowchart per entry point, the busiest 30; the rest in a table), data and outside services, modules (diagram of the 60 most connected, table, per-module file diagrams in `<details>`), rules, further reading (`source.docs`, titles from `docTitle`; description from `aboutOf`).
+   - Deterministic: no dates, so it diffs cleanly when kept in a repo.
+   - Labels go through `lbl()`: write a line break as `\n`, never `<br/>` (it would be escaped).
+   - After changing it, render every Mermaid block to check the syntax (mermaid installed in a scratch folder, loaded into Playwright). Mermaid's own layout can't be steered, so keep diagrams simple: few edges, one box per group.
 
 ## Brand: use it for everything
 The logo system lives in `brand/`. Its source of truth is the "Tecton logo" design canvas, which has construction, lockups, colour and in-use boards.

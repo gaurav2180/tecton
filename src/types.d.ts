@@ -32,6 +32,8 @@ export interface Source {
   files: string[];
   manifests: string[];
   extras?: string[];
+  /** Markdown docs (README, docs/…): working tree only, for `tecton docs` */
+  docs?: string[];
   read(path: string): string | null;
   readConfig?(name: string): string | null;
 }

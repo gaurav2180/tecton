@@ -101,6 +101,7 @@ export function workingTreeSource(dir) {
     files: files.filter(isCode).sort(),
     manifests: files.filter((f) => f === 'package.json' || f.endsWith('/package.json')).sort(),
     extras: files.filter(isExtra).sort(),
+    docs: files.filter((f) => /\.mdx?$/i.test(f)).sort(),
     read: (rel) => { try { return fs.readFileSync(path.join(dir, rel), 'utf8'); } catch { return null; } },
   };
 }
