@@ -28,7 +28,7 @@ export interface FileDep { from: FileInfo; to: FileInfo; status: Status; line: n
 /** A box on the architecture diagram. Positions are filled in by the layout. */
 export interface ArchNode {
   id: string;
-  type: 'person' | 'app' | 'db' | 'queue' | 'ext';
+  type: 'person' | 'app' | 'db' | 'queue' | 'ext' | 'extpanel';
   name: string;
   kind: string;
   sub: string;
@@ -41,6 +41,23 @@ export interface ArchNode {
   ref?: App | Store | Outside;
   color?: string;
   envOnly?: boolean;
+  /** the outside systems panel: group headings and one row per service */
+  rows?: ArchRow[];
+  /** width of one column of the outside panel */
+  colW?: number;
+}
+/** A row of the outside systems panel (a group heading when `head`). `y` is relative to the panel. */
+export interface ArchRow {
+  id: string;
+  name: string;
+  sub: string;
+  status: Status;
+  icon?: string;
+  head?: boolean;
+  x?: number;
+  y?: number;
+  ref?: Outside;
+  envOnly?: boolean;
 }
 type Pt = [number, number];
 /** A connector on the architecture diagram. Ports, route and label box are filled in by the router. */
@@ -50,8 +67,13 @@ export interface ArchEdge {
   to: string;
   kind: Link['kind'];
   status: Status;
+  /** the full label (tooltips) */
   label: string;
+  /** what's drawn on the wire: empty when the line's style already says it */
+  tag: string;
   link: Link;
+  /** every link this wire stands for (an app's wire into the outside panel carries several) */
+  links: Link[];
   async: boolean;
   ss?: 'top' | 'bottom' | 'left' | 'right';
   ts?: 'top' | 'bottom' | 'left' | 'right';

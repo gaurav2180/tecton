@@ -5,7 +5,8 @@
 // Both follow Changes / Before / After and open the same side sheet as the diagram.
 import { $$, h, icon } from '../lib/dom.js';
 import { D, hasBase, state } from '../lib/data.js';
-import { SYS, appColor, appIcon, appLabel, entrySummary, openSys, statusTag, storeIcon, svcById, visible } from './architecture.js';
+import { renderFlows } from './arch-flows.js';
+import { SYS, appColor, appIcon, appLabel, entrySummary, openSys, outsideIcon, statusTag, storeIcon, svcById, visible } from './architecture.js';
 
 /** @typedef {import('../../../types').App} App @typedef {import('../../../types').Store} Store @typedef {import('../../../types').OutsideDiff} Outside */
 
@@ -13,11 +14,11 @@ const ARCH_VIEWS = [
   { value: 'diagram', label: 'Diagram' },
   { value: 'tiers', label: 'Tiers' },
   { value: 'matrix', label: 'Matrix' },
+  { value: 'flows', label: 'Flows' },
 ];
 
 const inDiff = () => state.view === 'diff' && hasBase;
 const stCls = (x) => (inDiff() && x.status && x.status !== 'same' ? ` s-${x.status}` : '');
-const outsideIcon = (x) => ({ Email: 'mail', 'Web / HTTP': 'globe' }[x.kind] || 'cloud');
 const hostsOf = (x) => (x.hosts || []).map((hh) => (typeof hh === 'string' ? hh : hh.host));
 
 /** Everything a node talks to, both ways (visible links only). */
@@ -132,6 +133,7 @@ function renderArchAlt(box) {
   box.innerHTML = '';
   if (state.archView === 'tiers') renderTiers(box);
   else if (state.archView === 'matrix') renderArchMatrix(box);
+  else if (state.archView === 'flows') renderFlows(box);
 }
 
 export { ARCH_VIEWS, renderArchAlt };

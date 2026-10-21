@@ -83,7 +83,7 @@ const PAGES = [
   { id: 'rules', title: 'Rule checks', icon: 'shield' },
   { id: 'changes', title: 'Changes', icon: 'compare' },
   { id: 'modules', title: 'Modules', icon: 'box' },
-];
+].filter((p) => hasBase || p.id !== 'changes'); // without git history there is nothing to compare
 /** Shared UI state. mapView/archView: which kind of diagram each page shows (remembered per browser). */
 const state = {
   page: 'overview', view: hasBase ? 'diff' : 'cur', selected: null, focusOnly: false, touchedOnly: false,

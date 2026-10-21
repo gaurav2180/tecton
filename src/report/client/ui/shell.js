@@ -40,7 +40,7 @@ function renderSidebar() {
       h('div', { class: 'name' }, h('span', { class: 'avatar', text: initials }), h('span', { text: D.project, title: D.project })),
       h('div', { class: 'compare' }, icon('branch'),
         h('span', { class: 'ref', text: D.curLabel, title: D.curLabel }),
-        hasBase ? [h('span', { class: 'vs', text: 'vs' }), h('span', { class: 'ref', text: baseShort(), title: D.baseLabel })] : [h('span'), h('span', { class: 'faint', text: 'snapshot only' })])),
+        hasBase ? [h('span', { class: 'vs', text: 'vs' }), h('span', { class: 'ref', text: baseShort(), title: D.baseLabel })] : [h('span'), h('span', { class: 'faint', text: 'current code · no git history', title: 'Not a git repo, or no main/master branch: there is nothing to compare against, so the report shows the code as it is now.' })])),
     h('div', { class: 'nav-label', text: 'Report' }),
     h('nav', { class: 'nav', 'aria-label': 'Pages' },
       PAGES.map((p) => h('a', { href: `#${p.id}`, dataset: { page: p.id } }, icon(p.icon), h('span', { text: p.title }), badgeFor(p.id)))),

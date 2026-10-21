@@ -261,4 +261,63 @@ test('cron expressions in plain words', () => {
   assert.equal(describeCron('5 4 * 2 3'), null);
 });
 
+// ---------------------------------------------------------------- request flows
+const entryOf = (sys, app, group, key) => sys.apps.find((a) => a.id === app).groups[group].find((x) => x.key === key);
+const flowOf = (sys, app, group, key) => entryOf(sys, app, group, key).flow.map((s) => `${s.to}${s.ep ? ` ${s.ep}` : ''}`);
+
+test('flows follow each route handler, not the whole file, and only the names taken through a barrel', () => {
+  const sys = detectSystem(sourceOf({
+    'server/package.json': JSON.stringify({ dependencies: { express: '4', pg: '8', stripe: '1' } }),
+    'server/index.js': `import express from 'express';
+import { listOrders, refund } from './services/index.js';
+const app = express();
+app.get('/orders', async (req, res) => res.json(await listOrders()));
+app.post('/refunds', (req, res) => refund(req.body));
+app.get('/health', (req, res) => res.send('db stripe listOrders'));`,
+    'server/services/index.js': "export { listOrders } from './orders.js';\nexport { refund } from './payments.js';",
+    'server/services/orders.js': "import { pool } from '../db.js';\nimport { charge } from './payments.js';\nexport const listOrders = () => pool.query('select 1');\nexport const pay = (n) => charge(n);",
+    'server/services/payments.js': "import Stripe from 'stripe';\nconst stripe = new Stripe('k');\nexport function refund(x) { return stripe.refunds.create(x); }\nexport function charge(n) { return stripe.charges.create(n); }",
+    'server/db.js': "import pg from 'pg';\nexport const pool = new pg.Pool();",
+  }), null);
+  assert.deepEqual(flowOf(sys, 'server', 'endpoints', 'GET /orders'), ['store:postgres']); // pay() and Stripe stay out
+  assert.deepEqual(flowOf(sys, 'server', 'endpoints', 'POST /refunds'), ['svc:stripe']);
+  assert.deepEqual(flowOf(sys, 'server', 'endpoints', 'GET /health'), []); // words in strings are not code
+  const step = entryOf(sys, 'server', 'endpoints', 'GET /orders').flow[0];
+  assert.deepEqual(step.via, ['server/index.js', 'server/services/index.js', 'server/services/orders.js', 'server/db.js']);
+});
+
+test('flows match HTTP calls to the route they land on, across apps and on the same app', () => {
+  const sys = detectSystem(sourceOf({
+    'web/package.json': JSON.stringify({ dependencies: { next: '15' } }),
+    'web/app/orders/[id]/page.tsx': "import { getOrder } from '../../../lib/api';\nexport default async function P({ params }) { return getOrder(params.id); }",
+    'web/app/pay/page.tsx': "export default function Pay() { return fetch('/api/pay', { method: 'POST' }); }",
+    'web/app/api/pay/route.ts': 'export async function POST() {}',
+    'web/lib/api.ts': 'const BASE = process.env.NEXT_PUBLIC_BACKEND_URL;\nexport const getOrder = (id) => fetch(`${BASE}/orders/${id}`);',
+    'web/.env.example': 'NEXT_PUBLIC_BACKEND_URL=\nBILLING_API_URL=\n',
+    'shop/package.json': JSON.stringify({ dependencies: { express: '4' } }),
+    'shop/index.js': "const app = require('express')();\napp.get('/orders/:id', f);",
+    'api/package.json': JSON.stringify({ dependencies: { express: '4' } }),
+    'api/index.js': "const app = require('express')();\napp.get('/users', f);",
+  }), null);
+  // BACKEND_URL names no app, but only "shop" has GET /orders/:id
+  assert.deepEqual(flowOf(sys, 'web', 'pages', '/orders/[id]'), ['shop GET /orders/:id']);
+  assert.deepEqual(flowOf(sys, 'web', 'pages', '/pay'), ['web /api/pay']);
+  assert.ok(sys.links.some((l) => l.from === 'web' && l.to === 'shop'));
+  assert.ok(!sys.links.some((l) => l.from === 'web' && l.to === 'api'), 'BILLING_API_URL is not the app called "api"');
+  assert.ok(sys.outside.some((o) => o.id === 'env:BILLING_API_URL'));
+});
+
+test('queue workers are entry points, and a job put on a queue is a step', () => {
+  const sys = detectSystem(sourceOf({
+    'svc/package.json': JSON.stringify({ dependencies: { express: '4', bullmq: '5', resend: '1' } }),
+    'svc/queues.js': "import { Queue } from 'bullmq';\nexport const emails = new Queue('emails');",
+    'svc/index.js': "import express from 'express';\nimport { emails } from './queues.js';\nconst app = express();\napp.post('/signup', async () => emails.add('welcome', {}));",
+    'svc/worker.js': "import { Worker } from 'bullmq';\nimport { Resend } from 'resend';\nconst resend = new Resend();\nnew Worker('emails', async (job) => resend.emails.send(job.data));",
+  }), null);
+  assert.deepEqual(flowOf(sys, 'svc', 'endpoints', 'POST /signup'), ['store:queue-emails']);
+  const w = entryOf(sys, 'svc', 'workers', 'emails · svc/worker.js');
+  assert.equal(w.queue, 'store:queue-emails');
+  assert.deepEqual(w.flow.map((s) => s.to), ['svc:resend']);
+});
+
 console.log(`${passed} tests passed${process.exitCode ? ', some FAILED' : ''}`);

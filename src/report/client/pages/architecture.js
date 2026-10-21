@@ -21,6 +21,7 @@ const GROUPS = [
   { key: 'endpoints', title: 'HTTP endpoints', icon: 'code' },
   { key: 'jobs', title: 'Jobs & scripts', icon: 'terminal', mono: true },
   { key: 'schedules', title: 'Schedules', icon: 'clock', mono: true },
+  { key: 'workers', title: 'Queue workers', icon: 'queue', mono: true },
 ];
 const storeIcon = (x) => (x.kind === 'Queue' ? 'queue' : 'database');
 const appIcon = (a) => ({ web: 'globe', mobile: 'phone', desktop: 'monitor', server: 'server' }[a.role] || 'box');
@@ -29,6 +30,22 @@ const stClass = (x) => (state.view === 'diff' && x.status && x.status !== 'same'
 const appById = new Map(SYS.apps.map((a) => /** @type {[string, App]} */ ([a.id, a])));
 const appLabel = (id) => (id === 'users' ? 'Users' : (appById.get(id) || {}).name || id);
 const svcById = new Map([...SYS.stores, ...SYS.outside].map((x) => /** @type {[string, Store | Outside]} */ ([x.id, x])));
+// outside systems, grouped by what they're for (the diagram's panel and the tiers use the same groups)
+const OUTSIDE_CATS = [
+  { key: 'pay', title: 'Payments', icon: 'card', kinds: ['Payments'] },
+  { key: 'ai', title: 'AI', icon: 'sparkle', kinds: ['AI', 'Vector DB'] },
+  { key: 'msg', title: 'Email & messaging', icon: 'mail', kinds: ['Email', 'SMS', 'Messaging', 'Realtime'] },
+  { key: 'auth', title: 'Sign-in', icon: 'key', kinds: ['Auth'] },
+  { key: 'obs', title: 'Monitoring & analytics', icon: 'activity', kinds: ['Monitoring', 'Analytics'] },
+  { key: 'other', title: 'Other services', icon: 'cloud', kinds: [] },
+  { key: 'web', title: 'Web APIs', icon: 'globe', kinds: ['Web / HTTP'] },
+  { key: 'env', title: 'Address set at deploy time', icon: 'link', kinds: ['Set by env var'] },
+];
+const catOf = (x) => OUTSIDE_CATS.find((c) => c.kinds.includes(x.kind)) || OUTSIDE_CATS[5];
+const outsideCat = (x) => catOf(x).key;
+const outsideIcon = (x) => catOf(x).icon;
+const PANEL_HEAD = 64; const PANEL_CAT = 30; const PANEL_ROW = 44;
+const isExt = (n) => n.type === 'ext' || n.type === 'extpanel';
 
 function orderApps() {
   // callers to the left of the apps they call; front doors first
@@ -53,7 +70,7 @@ const clip = (t, n) => (t.length > n ? `${t.slice(0, n - 1)}…` : t);
 const statusOf = (list) => (list.every((x) => x.status === 'added') ? 'added' : list.every((x) => x.status === 'removed') ? 'removed' : 'same');
 
 function entrySummary(a) {
-  const words = { pages: ['page', 'pages'], api: ['route', 'routes'], endpoints: ['endpoint', 'endpoints'], jobs: ['job', 'jobs'], schedules: ['schedule', 'schedules'] };
+  const words = { pages: ['page', 'pages'], api: ['route', 'routes'], endpoints: ['endpoint', 'endpoints'], jobs: ['job', 'jobs'], schedules: ['schedule', 'schedules'], workers: ['queue worker', 'queue workers'] };
   return GROUPS.map((g) => [g.key, (a.groups[g.key] || []).filter((x) => x.status !== 'removed').length]).filter(([, n]) => n)
     .map(([k, n]) => `${n} ${words[k][n === 1 ? 0 : 1]}`).join(' · ');
 }
@@ -89,17 +106,49 @@ function archModel() {
     const w = snap(Math.max(q ? 192 : 176, 44 + textW(clip(x.name, 24), 7.6)));
     nodes.push({ id: x.id, type: q ? 'queue' : 'db', name: clip(x.name, 24), kind: q ? 'Queue' : x.kind, sub: clip(x.via.join(', '), 30), status: x.status || 'same', w, h: q ? 72 : 104, ref: x });
   }
-  for (const x of SYS.outside) {
-    const hosts = (x.hosts || []).map((hh) => (typeof hh === 'string' ? hh : hh.host));
-    const sub = x.id.startsWith('env:') ? `set by ${x.via[0] || 'an env var'}` : hosts.length ? clip(hosts.join(', '), 30) : x.via.length ? clip(x.via.join(', '), 30) : '';
-    const w = snap(Math.max(208, 56 + textW(clip(x.name, 26), 7.8), 32 + textW(sub, 6.3)));
-    nodes.push({ id: x.id, type: 'ext', name: clip(x.name, 26), kind: `External · ${x.kind}`, sub, status: x.status || 'same', w, h: 80, ref: x, envOnly: x.id.startsWith('env:') });
+  // outside systems: one panel, grouped by what they're for, with one wire per app (not one per service)
+  if (SYS.outside.length) {
+    /** @type {import('../types').ArchRow[]} */
+    const rows = [];
+    for (const cat of OUTSIDE_CATS) {
+      const list = SYS.outside.filter((x) => outsideCat(x) === cat.key).sort((a, b) => a.name.localeCompare(b.name));
+      if (!list.length) continue;
+      rows.push({ head: true, id: `cat:${cat.key}`, name: cat.title, sub: '', status: statusOf(list), icon: cat.icon });
+      for (const x of list) {
+        const hosts = (x.hosts || []).map((hh) => (typeof hh === 'string' ? hh : hh.host));
+        const sub = x.id.startsWith('env:') ? `set by ${x.via[0] || 'an env var'}` : x.id.startsWith('web:') ? clip(hosts.join(', ') || x.name, 34) : x.kind;
+        rows.push({ id: x.id, name: clip(x.name, 28), sub: clip(sub, 34), status: x.status || 'same', icon: outsideIcon(x), ref: x, envOnly: x.id.startsWith('env:') });
+      }
+    }
+    const colW = snap(Math.max(232, ...rows.map((r) => 24 + Math.max(textW(r.name, 7.6), textW(r.sub, 6.3)) + 64)));
+    // many services: flow the groups into columns (never splitting a group), so the panel stays about as tall as the repo
+    const blocks = [];
+    rows.forEach((r) => { if (r.head) blocks.push([]); blocks[blocks.length - 1].push(r); });
+    const hOf = (b) => b.reduce((s0, r) => s0 + (r.head ? PANEL_CAT : PANEL_ROW), 0);
+    const total = blocks.reduce((s0, b) => s0 + hOf(b), 0);
+    const cols = Math.min(3, Math.max(1, Math.ceil(total / 480)));
+    let col = 0; let y = PANEL_HEAD; let maxY = y;
+    for (const b of blocks) {
+      if (col < cols - 1 && y > PANEL_HEAD && y - PANEL_HEAD + hOf(b) / 2 > total / cols) { col++; y = PANEL_HEAD; }
+      for (const r of b) { r.x = col * colW; r.y = y; y += r.head ? PANEL_CAT : PANEL_ROW; }
+      maxY = Math.max(maxY, y);
+    }
+    nodes.push({ id: 'outside', type: 'extpanel', name: 'Outside systems', kind: 'External · run by others', sub: '', status: statusOf(SYS.outside), w: colW * (col + 1) + 8, h: snap(maxY + 12), rows, colW });
   }
   const byId = new Map(nodes.map((n) => [n.id, n]));
-  const edges = SYS.links.filter((l) => byId.has(l.from) && byId.has(l.to)).map((l) => /** @type {ArchEdge} */ ({
-    id: l.id, from: l.from, to: l.to, kind: l.kind, status: l.status || 'same', label: wireLabel(l), link: l,
+  // the label drawn on a wire: only what the line itself can't say. A plain line into a database already
+  // means "reads & writes" (see the legend), so those stay bare; queue verbs and app calls keep theirs.
+  const tagOf = (l) => (l.kind === 'data' && !l.labels.length && byId.get(l.to).type !== 'queue' ? '' : wireLabel(l));
+  const edges = SYS.links.filter((l) => l.kind !== 'outside' && byId.has(l.from) && byId.has(l.to)).map((l) => /** @type {ArchEdge} */ ({
+    id: l.id, from: l.from, to: l.to, kind: l.kind, status: l.status || 'same', label: wireLabel(l), tag: tagOf(l), link: l, links: [l],
     async: l.kind === 'data' && byId.get(l.to).type === 'queue',
   }));
+  // each app's outside calls travel as one wire into the panel
+  const outByApp = new Map();
+  SYS.links.filter((l) => l.kind === 'outside' && byId.has(l.from)).forEach((l) => { if (!outByApp.has(l.from)) outByApp.set(l.from, []); outByApp.get(l.from).push(l); });
+  for (const [from, list] of outByApp) {
+    edges.push({ id: `${from}→outside`, from, to: 'outside', kind: 'outside', status: statusOf(list), label: `calls ${plural(list.length, 'outside system')}`, tag: '', link: list[0], links: list, async: false });
+  }
   return { nodes, edges, byId };
 }
 
@@ -136,7 +185,18 @@ function archLayout(M) {
   if (data.length) {
     const bary = (n) => { const us = M.edges.filter((e) => e.to === n.id).map((e) => M.byId.get(e.from)).filter((m) => m && m.x != null); return us.length ? us.reduce((s0, m) => s0 + m.x + m.w / 2, 0) / us.length : cx; };
     data.sort((a, b) => bary(a) - bary(b) || Number(a.type === 'queue') - Number(b.type === 'queue') || a.name.localeCompare(b.name));
-    y += place(data, y, cx) + 0;
+    const rh = place(data, y, cx);
+    // then slide each store under the apps that use it (keeping order and gaps), so wires drop straight down
+    const want = data.map((n) => bary(n) - n.w / 2);
+    const xs = [];
+    const sweep = () => data.forEach((n, i) => { xs[i] = i ? Math.max(xs[i], xs[i - 1] + data[i - 1].w + DATA_GAP) : xs[i]; });
+    data.forEach((n, i) => { xs[i] = want[i]; });
+    sweep();
+    const drift = xs.reduce((s0, x, i) => s0 + x - want[i], 0) / data.length;
+    data.forEach((n, i) => { xs[i] -= drift; });
+    sweep();
+    data.forEach((n, i) => { n.x = snap(xs[i]); });
+    y += rh;
   } else y -= ROW_GAP;
   const inner = [...apps, ...data];
   const bx0 = snap(Math.min(...inner.map((n) => n.x)) - PAD);
@@ -150,26 +210,11 @@ function archLayout(M) {
     const ux = fronts.length ? fronts.reduce((s0, m) => s0 + m.x + m.w / 2, 0) / fronts.length : cx;
     u.x = snap(ux - u.w / 2); u.y = 0;
   }
-  // outside systems: columns right of the boundary, ordered by who calls them
-  const ext = M.nodes.filter((n) => n.type === 'ext');
-  if (ext.length) {
-    const callerY = (n) => { const us = M.edges.filter((e) => e.to === n.id).map((e) => M.byId.get(e.from)).filter((m) => m && m.y != null); return us.length ? us.reduce((s0, m) => s0 + m.y + m.h / 2, 0) / us.length : 0; };
-    ext.sort((a, b) => callerY(a) - callerY(b) || /** @type {Outside} */ (a.ref).kind.localeCompare(/** @type {Outside} */ (b.ref).kind) || a.name.localeCompare(b.name));
-    const EG = 40; // leaves a routing corridor between boxes (clearance is 12 on each side)
-    const areaTop = boundary ? boundary.y : 0;
-    const areaH = boundary ? boundary.h : 600;
-    // tall columns beat many short ones: the diagram stays closer to a screen's shape
-    const perCol = Math.max(4, Math.floor((areaH + EG) / (80 + EG)), Math.min(8, Math.ceil(ext.length / 2)));
-    const cols = Math.ceil(ext.length / perCol);
-    const colW = Math.max(...ext.map((n) => n.w));
-    let x0 = (boundary ? boundary.x + boundary.w : 0) + 176;
-    for (let c = 0; c < cols; c++) {
-      const list = ext.slice(c * perCol, (c + 1) * perCol);
-      const hh = list.reduce((s0, n) => s0 + n.h, 0) + EG * (list.length - 1);
-      let yy = areaTop + Math.max(0, (areaH - hh) / 2);
-      list.forEach((n) => { n.x = snap(x0 + (colW - n.w) / 2); n.y = snap(yy); yy += n.h + EG; });
-      x0 += colW + 96;
-    }
+  // outside systems: one panel right of the boundary, its top level with the boundary's (or centred on it when shorter)
+  const panel = M.byId.get('outside');
+  if (panel) {
+    panel.x = snap((boundary ? boundary.x + boundary.w : cx * 2) + 144);
+    panel.y = snap(boundary ? boundary.y + Math.max(0, (boundary.h - panel.h) / 2) : 0);
   }
   const all = M.nodes;
   const minX = Math.min(...all.map((n) => n.x), boundary ? boundary.x : Infinity);
@@ -203,8 +248,11 @@ function routeWires(M, L) {
   for (const e of M.edges) {
     const s0 = M.byId.get(e.from); const t = M.byId.get(e.to);
     let ss; let ts;
-    if (t.y >= s0.y + s0.h + 24 && !(t.type === 'ext' && s0.type !== 'person')) { ss = 'bottom'; ts = 'top'; }
-    else if (t.y + t.h + 24 <= s0.y && t.type !== 'ext') { ss = 'top'; ts = 'bottom'; }
+    // an app with another app to its right reaches the outside panel over the top of the row, not around its neighbours
+    const walled = isExt(t) && s0.type === 'app' && M.nodes.some((m) => m.type === 'app' && m !== s0 && m.x > s0.x && m.y < s0.y + s0.h && m.y + m.h > s0.y);
+    if (walled) { ss = 'top'; ts = 'left'; }
+    else if (t.y >= s0.y + s0.h + 24 && !(isExt(t) && s0.type !== 'person')) { ss = 'bottom'; ts = 'top'; }
+    else if (t.y + t.h + 24 <= s0.y && !isExt(t)) { ss = 'top'; ts = 'bottom'; }
     else if (t.x + t.w / 2 >= s0.x + s0.w / 2) { ss = 'right'; ts = 'left'; }
     else { ss = 'left'; ts = 'right'; }
     e.ss = ss; e.ts = ts;
@@ -223,8 +271,14 @@ function routeWires(M, L) {
     const span = outgoing ? 0 : Math.min(len * 0.7, Math.max(0, (list.length - 1) * 24));
     // leave from the half of the side that faces the targets, so bundles don't all start dead centre
     const bias = outgoing && list.length ? Math.max(-len * 0.25, Math.min(len * 0.25, (list.reduce((s0, p) => s0 + (horiz ? p.other.x + p.other.w / 2 : p.other.y + p.other.h / 2), 0) / list.length - ((horiz ? n.x : n.y) + len / 2)) * 0.3)) : 0;
+    // the tall outside panel takes its wires level with the apps that send them, not halfway down
+    let mid = (horiz ? n.x : n.y) + len / 2;
+    if (n.type === 'extpanel' && !outgoing) {
+      const avg = list.reduce((s0, p) => s0 + p.other.y + p.other.h / 2, 0) / list.length;
+      mid = Math.max(n.y + PANEL_HEAD / 2 + span / 2, Math.min(n.y + n.h - 24 - span / 2, avg));
+    }
     list.forEach((p, i) => {
-      const off = snap((horiz ? n.x : n.y) + len / 2 + bias - span / 2 + (list.length > 1 && span ? (span * i) / (list.length - 1) : 0));
+      const off = snap(mid + bias - span / 2 + (list.length > 1 && span ? (span * i) / (list.length - 1) : 0));
       const P = p.side === 'right' ? [n.x + n.w, off] : p.side === 'left' ? [n.x, off] : p.side === 'bottom' ? [off, n.y + n.h] : [off, n.y];
       const d = DIRS[sideDir[p.side]];
       const Q = [P[0] + d[0] * 3 * G, P[1] + d[1] * 3 * G]; // first free grid point outside the clearance
@@ -237,7 +291,8 @@ function routeWires(M, L) {
   for (const e of order) {
     const sx = Math.round((e.Q0[0] - ox) / G); const sy = Math.round((e.Q0[1] - oy) / G);
     const tx = Math.round((e.Q1[0] - ox) / G); const ty = Math.round((e.Q1[1] - oy) / G);
-    const me = srcIdx.get(e.from);
+    // wires into the outside panel share one trunk whoever sends them; others bundle per source
+    const me = e.to === 'outside' ? 32000 : srcIdx.get(e.from);
     const startDir = sideDir[e.ss];
     const endDir = (sideDir[e.ts] + 2) % 4; // arrive moving into the target
     const N = W * H * 4;
@@ -296,7 +351,8 @@ function routeWires(M, L) {
   const placed = [];
   const hit = (r) => [...boxes, ...placed].some((o) => r.x < o.x + o.w && r.x + r.w > o.x && r.y < o.y + o.h && r.y + r.h > o.y);
   for (const e of order) {
-    const w = e.label.length * 6.3 + 18; const hgt = 20;
+    if (!e.tag) continue;
+    const w = e.tag.length * 6.3 + 18; const hgt = 20;
     const all = [];
     for (let i = 0; i < e.pts.length - 1; i++) { const a = e.pts[i]; const c = e.pts[i + 1]; all.push({ a, c, len: Math.abs(a[0] - c[0]) + Math.abs(a[1] - c[1]) }); }
     // bundles share their first stretch, so label each wire on its own last stretch; else on its longest
@@ -331,11 +387,48 @@ function roundedPath(pts, r = 10) {
 }
 
 // ---- drawing
+const archIco = (name, x, y, sc = 0.75) => s('g', { class: 'an-ico', transform: `translate(${x},${y}) scale(${sc})`, html: ICONS[name] });
+const archTxt = (cls, x, y, t, anchor) => s('text', { class: cls, x, y, 'text-anchor': anchor || 'start' }, t);
+const archBadge = (cls, label, bw, x, y) => s('g', { class: `an-badge ${cls}`, transform: `translate(${x},${y})` }, s('rect', { width: bw, height: 17, rx: 5 }), s('text', { x: bw / 2, y: 12, 'text-anchor': 'middle' }, label));
+
+/** The outside systems panel: a heading, then one row per service under its group. Each row is its own target. */
+/** @param {ArchNode} n */
+function archPanel(n) {
+  const g = s('g', { class: `an t-${n.type}`, transform: `translate(${n.x},${n.y})`, dataset: { node: n.id } });
+  const { w, h } = n;
+  g.append(
+    s('rect', { class: 'an-shape', width: w, height: h, rx: 12 }),
+    archIco('cloud', 16, 17), archTxt('an-name', 44, 30, n.name), archTxt('an-kind', 44, 46, `[${n.kind}]`));
+  arch.rows = new Map();
+  for (const r of n.rows) {
+    if (r.head) {
+      g.append(s('g', { class: 'xcat', transform: `translate(${r.x},${r.y})` }, archIco(r.icon, 16, 9, 0.55), archTxt('xcat-t', 34, 19, r.name)));
+      continue;
+    }
+    const rw = n.colW - 16;
+    const row = s('g', { class: 'xrow', transform: `translate(${r.x + 12},${r.y})`, dataset: { svc: r.id }, tabindex: 0, role: 'button', 'aria-label': `${r.name}, outside system` },
+      s('rect', { class: `xrow-bg${r.envOnly ? ' env' : ''}`, y: 2, width: rw, height: PANEL_ROW - 6, rx: 8 }),
+      archTxt('xrow-n', 12, 19, r.name), archTxt('xrow-s', 12, 33, r.sub),
+      archBadge('b-add', 'NEW', 36, rw - 44, 11), archBadge('b-rem', 'GONE', 40, rw - 48, 11));
+    const open = () => openSys({ type: 'svc', id: r.id });
+    row.addEventListener('click', (ev) => { if (arch.dragMoved) return; ev.stopPropagation(); open(); });
+    row.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(); } });
+    row.addEventListener('pointerenter', () => { if (!arch.drag) archHl(r.id); });
+    row.addEventListener('pointerleave', () => archHl(null));
+    row.addEventListener('focus', () => archHl(r.id));
+    row.addEventListener('blur', () => archHl(null));
+    g.append(row);
+    arch.rows.set(r.id, { r, el: row });
+  }
+  return g;
+}
+
 /** @param {ArchNode} n */
 function archNode(n) {
+  if (n.type === 'extpanel') return archPanel(n);
   const g = s('g', { class: `an t-${n.type}`, transform: `translate(${n.x},${n.y})`, dataset: { node: n.id } });
-  const ic = (name, x, y, sc = 0.75) => s('g', { class: 'an-ico', transform: `translate(${x},${y}) scale(${sc})`, html: ICONS[name] });
-  const txt = (cls, x, y, t, anchor) => s('text', { class: cls, x, y, 'text-anchor': anchor || 'start' }, t);
+  const ic = archIco;
+  const txt = archTxt;
   const { w, h } = n;
   if (n.type === 'person') {
     // C4 person: a head above a body with rounded shoulders (a clear gap between them, like the notation)
@@ -379,8 +472,7 @@ function archNode(n) {
   [...g.children].filter((el) => !/\ban-(shape|lid)\b/.test(el.getAttribute('class') || '')).forEach((el) => full.appendChild(el));
   const bodyTop = n.type === 'person' ? 44 : 0;
   g.append(full, s('g', { class: 'an-simple' }, txt('an-name', w / 2, bodyTop + (h - bodyTop) / 2 + 5, n.name, 'middle')));
-  const badge = (cls, label, bw) => s('g', { class: `an-badge ${cls}`, transform: `translate(${w - bw - 10},-9)` }, s('rect', { width: bw, height: 17, rx: 5 }), s('text', { x: bw / 2, y: 12, 'text-anchor': 'middle' }, label));
-  g.append(badge('b-add', 'NEW', 36), badge('b-rem', 'GONE', 40));
+  g.append(archBadge('b-add', 'NEW', 36, w - 46, -9), archBadge('b-rem', 'GONE', 40, w - 50, -9));
   if (n.type !== 'person') {
     g.setAttribute('tabindex', 0); g.setAttribute('role', 'button');
     g.setAttribute('aria-label', `${n.name}, ${n.kind}`);
@@ -425,10 +517,14 @@ function buildArch(svg) {
     const g = s('g', { class: `aw k-${e.kind}${e.async ? ' async' : ''}`, dataset: { wire: e.id } }, path, s('path', { class: 'whit', d }));
     let lbl = null;
     if (e.lbl) {
-      lbl = s('g', { class: `aw-lbl k-${e.kind}` }, s('rect', { x: e.lbl.x, y: e.lbl.y, width: e.lbl.w, height: e.lbl.h, rx: 10 }), s('text', { x: e.lbl.x + e.lbl.w / 2, y: e.lbl.y + e.lbl.h / 2 + 0.5, 'text-anchor': 'middle', 'dominant-baseline': 'central' }, e.label));
+      lbl = s('g', { class: `aw-lbl k-${e.kind}` }, s('rect', { x: e.lbl.x, y: e.lbl.y, width: e.lbl.w, height: e.lbl.h, rx: 10 }), s('text', { x: e.lbl.x + e.lbl.w / 2, y: e.lbl.y + e.lbl.h / 2 + 0.5, 'text-anchor': 'middle', 'dominant-baseline': 'central' }, e.tag));
       lblLayer.appendChild(lbl);
     }
-    const tipHtml = () => `<div class="tt">${esc(e.from === 'users' ? 'Users' : (M.byId.get(e.from) || {}).name || e.from)} <span class="faint">→</span> ${esc((M.byId.get(e.to) || {}).name || e.to)}</div><div class="kv"><span>${esc(e.label)}</span><b>${e.link.count || ''}</b></div>${hasBase && e.status !== 'same' ? `<div class="kv"><span>Status</span><b>${e.status === 'added' ? 'New' : 'Removed'}</b></div>` : ''}${e.link.evidence && e.link.evidence[0] ? `<div class="kv faint"><span class="mono-s">${esc(e.link.evidence[0].file)}:${e.link.evidence[0].line}</span></div>` : ''}`;
+    const head = `<div class="tt">${esc(e.from === 'users' ? 'Users' : (M.byId.get(e.from) || {}).name || e.from)} <span class="faint">→</span> ${esc((M.byId.get(e.to) || {}).name || e.to)}</div>`;
+    const stTip = hasBase && e.status !== 'same' ? `<div class="kv"><span>Status</span><b>${e.status === 'added' ? 'New' : 'Removed'}</b></div>` : '';
+    const tipHtml = () => (e.to === 'outside'
+      ? `${head}${e.links.filter(visible).map((l) => `<div class="kv"><span>${esc((svcById.get(l.to) || {}).name || l.to)}</span><b>${state.view === 'diff' && hasBase && l.status !== 'same' ? (l.status === 'added' ? 'new' : 'removed') : ''}</b></div>`).join('')}`
+      : `${head}<div class="kv"><span>${esc(e.label)}</span><b>${e.link.count || ''}</b></div>${stTip}${e.link.evidence && e.link.evidence[0] ? `<div class="kv faint"><span class="mono-s">${esc(e.link.evidence[0].file)}:${e.link.evidence[0].line}</span></div>` : ''}`);
     [g, lbl].filter(Boolean).forEach((el) => {
       el.addEventListener('pointermove', (ev) => { if (!arch.drag) showTip(ev, tipHtml()); });
       el.addEventListener('pointerleave', hideTip);
@@ -456,21 +552,33 @@ function applyArch() {
     if (lbl) lbl.setAttribute('class', `aw-lbl k-${e.kind} ${cls}`);
     path.setAttribute('marker-end', `url(#aw-${st === 'added' ? 'add' : st === 'removed' ? 'rem' : e.kind === 'app' ? 'app' : e.kind === 'data' ? 'data' : 'line'})`);
   }
+  for (const { r, el } of (arch.rows || new Map()).values()) {
+    const st = state.view === 'diff' && hasBase ? r.status : 'same';
+    el.setAttribute('class', `xrow ${st}${present(r.status) ? '' : ' gone'}`);
+  }
 }
 
+/** Light up a box or an outside-system row and everything it talks to; null clears. */
 function archHl(id) {
   const cv = $('#arch-card');
   if (!cv) return;
   applyArch(); // resets classes and arrowheads
   cv.classList.toggle('hl-on', !!id);
   if (!id) return;
+  const rows = arch.rows || new Map();
+  const isRow = rows.has(id);
   const near = new Set([id]);
+  const litRows = new Set(isRow ? [id] : []);
   for (const { e, g, path, lbl } of arch.wires) {
-    const on = e.from === id || e.to === id;
+    const on = isRow ? e.links.some((l) => l.to === id && visible(l)) : e.from === id || e.to === id;
     g.classList.toggle('hl', on); if (lbl) lbl.classList.toggle('hl', on);
-    if (on) { near.add(e.from); near.add(e.to); path.setAttribute('marker-end', 'url(#aw-hl)'); }
+    if (!on) continue;
+    near.add(e.from); near.add(e.to); path.setAttribute('marker-end', 'url(#aw-hl)');
+    // an app's wire into the panel lights the services it calls, not the whole panel
+    if (e.to === 'outside' && !isRow) e.links.filter(visible).forEach((l) => litRows.add(l.to));
   }
   for (const { n, el } of arch.nodes.values()) el.classList.toggle('hl', near.has(n.id));
+  for (const [rid, { el }] of rows) el.classList.toggle('hl', litRows.has(rid));
 }
 
 // ---- pan & zoom (same feel as the dependency map)
@@ -559,6 +667,7 @@ function renderSystem() {
     { value: 'cur', label: 'After' },
   ], state.view, (v) => { state.view = v; syncViews(); });
   vt.classList.add('sys-tabs');
+  if (!hasBase) vt.style.display = 'none'; // no git history: there's only the current code to show
   const kindTabs = tabs(ARCH_VIEWS, state.archView, (v) => setArchView(v));
   kindTabs.id = 'arch-kind-tabs';
   kindTabs.setAttribute('aria-label', 'Kind of diagram');
@@ -738,4 +847,4 @@ function systemGlance() {
     h('div', { class: 'card-b' }, flow, tail));
 }
 
-export { setArchView, SYS, sysState, GROUPS, storeIcon, appIcon, visible, stClass, appById, appLabel, svcById, orderApps, cssId, APP_COLORS, appColor, arch, G, snap, textW, clip, statusOf, entrySummary, wireLabel, archModel, archLayout, routeWires, roundedPath, archNode, buildArch, applyArch, archHl, archSetVB, archFit, archZoom, archPanZoom, exportArchSvg, renderSystem, statusTag, openSys, closeSheet, syncViews, systemGlance };
+export { OUTSIDE_CATS, outsideCat, outsideIcon, setArchView, SYS, sysState, GROUPS, storeIcon, appIcon, visible, stClass, appById, appLabel, svcById, orderApps, cssId, APP_COLORS, appColor, arch, G, snap, textW, clip, statusOf, entrySummary, wireLabel, archModel, archLayout, routeWires, roundedPath, archNode, buildArch, applyArch, archHl, archSetVB, archFit, archZoom, archPanZoom, exportArchSvg, renderSystem, statusTag, openSys, closeSheet, syncViews, systemGlance };

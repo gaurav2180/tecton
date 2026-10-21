@@ -107,9 +107,26 @@ export interface EntryPoint {
   cmd?: string | null;
   /** cron schedules: the expression in plain words */
   human?: string | null;
+  /** queue workers: the queue whose jobs it runs */
+  queue?: string;
+  /** what this entry point's code reaches, traced through its handler and imports */
+  flow?: FlowStep[];
   status?: Status;
 }
-export type EntryGroup = 'pages' | 'api' | 'endpoints' | 'jobs' | 'schedules';
+/** One step of a request flow: a store, service or app (and which of its routes) the code reaches. */
+export interface FlowStep {
+  /** an app id, store:…, svc:…, web:… or env:… */
+  to: string;
+  label: string | null;
+  /** the route or endpoint key it calls, when `to` is an app */
+  ep?: string;
+  line: number;
+  text: string | null;
+  /** the files from the entry point to the line that does it */
+  via: string[];
+  status?: Status;
+}
+export type EntryGroup = 'pages' | 'api' | 'endpoints' | 'jobs' | 'schedules' | 'workers';
 export interface App {
   id: string;
   root: string;

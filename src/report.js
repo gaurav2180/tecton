@@ -62,7 +62,7 @@ export function toMarkdown(model) {
     const mark = (st) => (st === 'added' ? '\u2795' : '\u2796');
     sys.apps.filter((a) => a.status !== 'same').forEach((a) => bullets.push(`${mark(a.status)} app **${a.name}** (${a.framework})`));
     for (const a of sys.apps) {
-      for (const [g, label] of [['pages', 'page'], ['api', 'route'], ['endpoints', 'endpoint'], ['jobs', 'job'], ['schedules', 'schedule']]) {
+      for (const [g, label] of [['pages', 'page'], ['api', 'route'], ['endpoints', 'endpoint'], ['jobs', 'job'], ['schedules', 'schedule'], ['workers', 'queue worker']]) {
         (a.groups[g] || []).filter((x) => x.status !== 'same').forEach((x) => bullets.push(`${mark(x.status)} ${label} \`${x.methods && x.methods.length ? `${x.methods.join('/')} ` : ''}${x.label}\`${x.human ? ` (${x.human})` : ''} in ${a.name}`));
       }
     }

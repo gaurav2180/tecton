@@ -29,7 +29,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === '/') { e.preventDefault(); openPalette(); }
   if (state.page === 'map' && state.mapView === 'graph' && (e.key === 'f' || e.key === 'F')) fit(true);
   if (state.page === 'system' && state.archView === 'diagram' && (e.key === 'f' || e.key === 'F')) archFit(true);
-  if (/^[1-6]$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey) go(PAGES[Number(e.key) - 1].id);
+  if (/^[1-6]$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey && PAGES[Number(e.key) - 1]) go(PAGES[Number(e.key) - 1].id);
 });
 
 // ------------------------------------------------------------------ boot

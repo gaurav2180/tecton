@@ -40,7 +40,7 @@ test.describe('every page renders and matches its screenshot', () => {
       await expect(page).toHaveScreenshot(`demo-${hash.replace(':', '-')}.png`, { mask: unversioned(page) });
     });
   }
-  for (const [hash, tabs, view] of [['map', '#map-kind-tabs', 'Matrix'], ['map', '#map-kind-tabs', 'Radial'], ['system', '#arch-kind-tabs', 'Tiers'], ['system', '#arch-kind-tabs', 'Matrix']]) {
+  for (const [hash, tabs, view] of [['map', '#map-kind-tabs', 'Matrix'], ['map', '#map-kind-tabs', 'Radial'], ['system', '#arch-kind-tabs', 'Tiers'], ['system', '#arch-kind-tabs', 'Matrix'], ['system', '#arch-kind-tabs', 'Flows']]) {
     test(`demo · ${hash} as ${view}`, async ({ page }) => {
       await open(page, 'demo', hash);
       await page.locator(`${tabs} button`, { hasText: view }).click();
@@ -56,7 +56,8 @@ test.describe('every page renders and matches its screenshot', () => {
   });
   test('big repo · architecture diagram', async ({ page }) => {
     await open(page, 'big', 'system');
-    await expect(page.locator('#arch-svg .an')).toHaveCount(4 + 6 + 11 + 1); // apps, stores, outside systems, users
+    await expect(page.locator('#arch-svg .an')).toHaveCount(4 + 6 + 1 + 1); // apps, stores, the outside systems panel, users
+    await expect(page.locator('#arch-svg .xrow')).toHaveCount(12); // one row per outside system
     await expect(page).toHaveScreenshot('big-system.png', { mask: unversioned(page) });
   });
 });
@@ -91,13 +92,14 @@ test.describe('interactions', () => {
     if (!isMobile) {
       await page.locator('#arch-svg .an[data-node="."]').hover();
       await expect(page.locator('#arch-card')).toHaveClass(/hl-on/);
-      await expect(page.locator('#arch-svg .an[data-node="svc:stripe"]')).toHaveClass(/\bhl\b/);
+      await expect(page.locator('#arch-svg .xrow[data-svc="svc:stripe"]')).toHaveClass(/\bhl\b/);
+      await expect(page.locator('#arch-svg .xrow[data-svc="web:shipfast.io"]')).not.toHaveClass(/\bhl\b/); // only the server calls it
       await expect(page.locator('#arch-svg .an[data-node="store:redis"]')).not.toHaveClass(/\bhl\b/);
       await page.mouse.move(5, 5);
     }
-    await expect(page.locator('#arch-svg .an[data-node="svc:stripe"]')).toHaveClass(/\badded\b/);
+    await expect(page.locator('#arch-svg .xrow[data-svc="svc:stripe"]')).toHaveClass(/\badded\b/);
     await page.locator('.sys-tabs button', { hasText: 'Before' }).click();
-    await expect(page.locator('#arch-svg .an[data-node="svc:stripe"]')).toHaveClass(/\bgone\b/);
+    await expect(page.locator('#arch-svg .xrow[data-svc="svc:stripe"]')).toHaveClass(/\bgone\b/);
     await page.locator('#arch-svg .an[data-node="server"]').click();
     await expect(page.locator('#sheet')).toHaveClass(/open/);
     await expect(page.locator('#sheet')).toContainText('HTTP endpoints');
@@ -147,6 +149,30 @@ test.describe('interactions', () => {
     await expect(page.locator('#arch-svg .an[data-node="server"] .an-full')).toBeHidden();
     await expect(page.locator('#arch-svg .aw-lbl').first()).toBeHidden();
     await expect(page).toHaveScreenshot('demo-system-simple.png', { mask: unversioned(page) });
+  });
+
+  test('flows: a request continues into the worker that runs its job, and callers link back', async ({ page }) => {
+    await open(page, 'demo', 'system');
+    await page.locator('#arch-kind-tabs button', { hasText: 'Flows' }).click();
+    await page.locator('.fl-item', { hasText: '/api/orders' }).filter({ hasText: 'POST' }).click();
+    await expect(page.locator('.fl-main')).toContainText('adds a job to');
+    await expect(page.locator('.fl-main')).toContainText('then a worker in server runs the job');
+    await page.locator('.fl-item', { hasText: 'emails queue' }).click();
+    await page.locator('.fl-callers .chip', { hasText: 'POST /api/orders' }).click();
+    await expect(page.locator('.fl-head h3')).toHaveText('POST /api/orders');
+    // files inside a module open it (the server's files are outside src/, so they have none)
+    await page.locator('.fl-item', { hasText: '/cart' }).click();
+    await expect(page.locator('.fl-main')).toContainText('via page.tsx → Cart.tsx');
+    await page.locator('.fl-main button.fl-code', { hasText: 'src/db/client.ts' }).click();
+    await expect(page).toHaveURL(/#module:db$/);
+  });
+
+  test('no git history: nothing to compare, so no Changes page or Before/After tabs', async ({ page }) => {
+    await open(page, 'big', 'overview');
+    await expect(page.locator('#sidebar a[data-page="changes"]')).toHaveCount(0);
+    await expect(page.locator('#page-overview')).toContainText('Request flows');
+    await page.goto(page.url().replace(/#.*$/, '#system'));
+    await expect(page.locator('.sys-tabs')).toBeHidden();
   });
 
   test('architecture tiers: Before hides what the branch added', async ({ page }) => {

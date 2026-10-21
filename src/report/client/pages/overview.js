@@ -5,6 +5,7 @@ import { baseShort } from '../ui/shell.js';
 import { hideTip, kindBadge, ruleStateBadge, showTip } from '../ui/common.js';
 import { openRule } from './rules.js';
 import { systemGlance } from './architecture.js';
+import { flowsGlance } from './arch-flows.js';
 import { goSelect } from './map.js';
 import { go } from '../ui/router.js';
 
@@ -27,7 +28,9 @@ function renderOverview() {
       h('p', { text: heroText }),
       h('div', { class: 'actions' },
         h('button', { class: 'btn primary', on: { click: () => go(curViols.length ? 'rules' : 'map') } }, icon(curViols.length ? 'shield' : 'map'), curViols.length ? 'Review rule breaks' : 'Open the map'),
-        h('button', { class: 'btn', on: { click: () => go('changes') } }, icon('compare'), 'See all changes'))),
+        hasBase
+          ? h('button', { class: 'btn', on: { click: () => go('changes') } }, icon('compare'), 'See all changes')
+          : h('button', { class: 'btn', on: { click: () => go('system') } }, icon('layers'), 'See the architecture'))),
     h('div', { class: 'big' },
       h('div', { class: 'v num', dataset: { count: hasBase ? newCount : curViols.length }, text: '0' }),
       h('div', { class: 'l', text: hasBase ? 'new rule breaks' : 'rule breaks' })));
@@ -60,7 +63,7 @@ function renderOverview() {
   ];
   const totalSeg = segs.reduce((a, b) => a + b.n, 0) || 1;
   const depCard = h('div', { class: 'card' },
-    h('div', { class: 'card-h' }, h('h3', { text: 'Dependency changes' }), h('div', { class: 'right' }, h('button', { class: 'link-btn', on: { click: () => go('changes') } }, 'View all', icon('right')))),
+    h('div', { class: 'card-h' }, h('h3', { text: hasBase ? 'Dependency changes' : 'Dependencies' }), h('div', { class: 'right' }, h('button', { class: 'link-btn', on: { click: () => go(hasBase ? 'changes' : 'map') } }, hasBase ? 'View all' : 'Open the map', icon('right')))),
     h('div', { class: 'card-b', style: { paddingBottom: '6px' } },
       h('div', { class: 'stackbar', role: 'img', 'aria-label': segs.map((x) => `${x.k}: ${x.n}`).join(', ') },
         segs.filter((x) => x.n).map((x, i) => h('span', {
@@ -103,7 +106,7 @@ function renderOverview() {
     h('div', { class: 'stagger' }, hero),
     stats,
     systemGlance(),
-    h('div', { class: 'grid two stagger', style: { marginTop: '14px' } }, depCard, rulesCard),
+    h('div', { class: 'grid two stagger', style: { marginTop: '14px' } }, (!hasBase && flowsGlance()) || depCard, rulesCard),
     h('div', { class: 'grid two stagger', style: { marginTop: '14px' } }, previewCard, sizeCard));
 }
 function changeRow(c) {

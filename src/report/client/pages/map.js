@@ -52,6 +52,7 @@ function renderMap() {
     { value: 'cur', label: 'After' },
   ], state.view, (v) => { state.view = v; applyMap(); });
   viewTabs.id = 'view-tabs';
+  if (!hasBase) viewTabs.style.display = 'none'; // no git history: there's only the current code to show
   const kindTabs = tabs(MAP_VIEWS, state.mapView, (v) => setMapView(v));
   kindTabs.id = 'map-kind-tabs';
   kindTabs.setAttribute('aria-label', 'Kind of diagram');

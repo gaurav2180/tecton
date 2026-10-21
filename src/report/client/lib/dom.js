@@ -91,6 +91,11 @@ const ICONS = {
 ICONS.queue = '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>';
 ICONS.pencil = '<path d="M21.17 6.81a2.82 2.82 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/>';
 ICONS.arrowLeft = '<path d="M19 12H5M12 19l-7-7 7-7"/>';
+ICONS.card = '<rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/>';
+ICONS.activity = '<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>';
+ICONS.key = '<path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4M21 2l-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/>';
+ICONS.play = '<path d="M6 3v18l15-9z"/>';
+ICONS.route = '<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>';
 function icon(name, cls) {
   const e = document.createElementNS(SVGNS, 'svg');
   e.setAttribute('class', `i${cls ? ` ${cls}` : ''}`);
